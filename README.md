@@ -9,7 +9,7 @@ A decomposition of historical wind power generation data
 Peter Regner, Katharina Gruber, Sebastian Wehrle, Johannes Schmidt
 
 
-Code will be published upon final publication of the results.
+**This repository contains code used for unpublished results. The code updated upon publication of the results.**
 
 
 Abstract
