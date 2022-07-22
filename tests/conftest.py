@@ -27,7 +27,7 @@ def turbines():
             "t_cap": ("turbines", 1500 * np.ones(num_turbines)),
             "p_year": (
                 "turbines",
-                np.repeat(np.arange(1999, 1999 + 10, dtype=np.float), num_turbines / 10),
+                np.repeat(np.arange(1999, 1999 + 10, dtype=float), num_turbines / 10),
             ),
         },
         coords={"turbines": np.arange(13, num_turbines + 13)},
@@ -48,7 +48,12 @@ def wind_speed(turbines, time):
     wind_speed = xr.DataArray(
         3 * np.ones((len(time), num_turbines)),
         dims=("time", "turbines"),
-        coords={"time": time, "longitude": turbines.xlong, "latitude": turbines.ylat},
+        coords={
+            "time": time,
+            "longitude": turbines.xlong,
+            "latitude": turbines.ylat,
+            "turbines": turbines.turbines,
+        },
     )
 
     # more wind between 2005 and 2011

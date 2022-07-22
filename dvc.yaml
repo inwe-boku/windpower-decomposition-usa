@@ -10,7 +10,7 @@ stages:
     #outs:
     #- data/input/wind_turbines_usa
   download_wind_era5:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/download_wind_era5.py
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/download_wind_era5.py
     #deps:
     #- src
     #- scripts
@@ -18,75 +18,117 @@ stages:
     # Note: not tracked via DVC atm because things get complicated with 115GB of data...
     #outs:
         #- data/input/wind_velocity_usa_era5
-        #
-  download_energy_generation:
-    cmd: EIA_API_KEY=$(cat eia-api-key); mkdir data/input/energy_generation; cd data/input/energy_generation;
-      wget http://api.eia.gov/series/\?api_key\=${EIA_API_KEY}\&series_id\=ELEC.GEN.WND-US-99.M
+
+  download_gwa2:
+    cmd: mkdir data/input/wind_speed_gwa2; cd data/input/wind_speed_gwa2; wget  -O gwa2_250_ws_DEFLATE.tif https://silo1.sciencedata.dk/themes/deic_theme_oc7/apps/files_sharing/public.php\?service\=files\&t\=cf5a3255eb87ca25b79aedd8afcaf570\&path\=%2FGWA2.1\&files\=gwa2_250_ws_DEFLATE.tif\&download\&g\=
+    outs:
+    - data/input/wind_speed_gwa2
+
+  download_p_out_eia:
+    cmd: EIA_API_KEY=$(cat eia-api-key); mkdir data/input/p_out_eia; cd data/input/p_out_eia;
+      wget https://api.eia.gov/series/\?api_key\=$EIA_API_KEY\&series_id\=ELEC.GEN.WND-US-99.M
       -O ELEC.GEN.WND-US-99.M.json
-    #outs:
-    #- data/input/energy_generation
+
+        # alls states: AK AR AZ CA CO CT DE FL HI IA ID IL IN KS MA MD ME MI MN MO MT NC ND NE NH NJ NM NV NY OH OK OR PA PR RI SD TN TX UT VA VT WA WI WV WY
+       # for state in IA AZ ID CA CO IN KS HI MD ME MI NH MN MO NM MT NY ND OK UT OR PA WA WV WY TX; do EIA_API_KEY=$(cat ../../../eia-api-key); mkdir data/input/p_out_eia; cd data/input/p_out_eia; wget http://api.eia.gov/series/\?api_key\=${EIA_API_KEY}\&series_id\=ELEC.GEN.WND-$state-99.M -O ELEC.GEN.WND-$state-99.M.json; done
+    outs:
+    - data/input/p_out_eia
+
+  download_power_curves:
+      cmd: mkdir data/input/power_curves; cd data/input/power_curves; wget https://raw.githubusercontent.com/renewables-ninja/vwf/master/power_curves/Wind%20Turbine%20Power%20Curves%20%7E%205%20\(0.01ms%20with%200.00%20w%20smoother\).csv -O power-curves-5_0_01ms_with_0w_smoother.csv
+      #outs:
+      #- data/input/power_curves
 
   ### Computations ###
 
   calc_turbine_time_series:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_turbine_time_series.py
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
     deps:
     - data/input/wind_turbines_usa
-    - data/input/energy_generation
+    - data/input/p_out_eia
     - src
     - scripts
     outs:
     - data/output/turbine-time-series
-  calc_power_in_wind:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_power_in_wind.py
+  wind_speed:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed.py
+    deps:
+    - src
+    - scripts
+    - data/input/wind_turbines_usa
+    - data/input/wind_velocity_usa_era5
+    outs:
+    - data/interim/wind_speed
+  calc_p_in:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_in.py
     deps:
     - data/output/turbine-time-series
-    - data/input/energy_generation
+    - data/input/p_out_eia
     - data/input/wind_turbines_usa
     - data/interim/wind_speed
     - src
     - scripts
     outs:
-    - data/output/power_in_wind
-  calc_wind_speed_distribution:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_wind_speed_distribution.py
+    - data/output/p_in
+  convert_gwa_to_netcdf:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/convert_gwa_to_netcdf.py
     deps:
-    #- data/input/wind_turbines_usa
-    #- data/interim/wind_speed
+    - src
+    - scripts
+    - data/input/wind_speed_gwa2
+    outs:
+    - data/interim/wind_speed_gwa
+  calc_bias_correction_gwa:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_bias_correction_gwa.py
+    deps:
+    - src
+    - scripts
+    - data/input/wind_turbines_usa
+    - data/interim/wind_speed
+    - data/interim/wind_speed_gwa
+    outs:
+    - data/output/bias_correction
+  calc_p_out_model:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_out_model.py
+    deps:
+    - src
+    - scripts
+    - data/input/wind_turbines_usa
+    - data/output/bias_correction
+    - data/interim/wind_speed
+    outs:
+    - data/output/p_out_model
+  calc_wind_speed_distribution:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed_distribution.py
+    deps:
+    - data/input/wind_turbines_usa
+    - data/interim/wind_speed
     - src
     - scripts
     outs:
     - data/output/wind_speed_distribution
   figures:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/generate_figures.py
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/generate_figures.py
     deps:
-        #- data/output/power_in_wind
-        #- data/output/turbine-time-series
+    - data/output/bias_correction
+    - data/output/p_in
+    - data/output/p_out_model
+    - data/output/turbine-time-series
     - src
     - scripts
     outs:
     - data/figures
   data_values:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_data_values.py
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_data_values.py
     deps:
     - src
     - scripts
-  wind_speed:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_wind_speed.py
-    deps:
-    - src
-    - scripts
-    - data/input/energy_generation
-    - data/input/wind_turbines_usa
-    - data/input/wind_velocity_usa_era5
-    outs:
-    - data/interim/wind_speed
 
 
   ### Misc ###
 
   run_jupyter:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} jupyter notebook #--ip 0.0.0.0 --no-browser
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD jupyter notebook #--ip 0.0.0.0 --no-browser
 
 
   ### Tests ###
@@ -108,7 +150,7 @@ stages:
     - scripts
     - src
   test_notebooks:
-    cmd: PYTHONPATH=${PYTHONPATH}:${PWD} jupyter nbconvert --execute notebooks/0*.ipynb
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD jupyter nbconvert --execute notebooks/0*.ipynb
       --stdout --to html > /dev/null
     deps:
     - notebooks
@@ -118,43 +160,71 @@ stages:
   ### Simulation dataset ###
 
   create_simulation_data:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/create_simulation_data.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/create_simulation_data.py
     deps:
     - src
     - scripts
     outs:
-    - data-simulation/input/energy_generation
+    - data-simulation/input/p_out_eia
     - data-simulation/input/wind_turbines_usa
     - data-simulation/input/wind_velocity_usa_era5
   calc_turbine_time_series_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_turbine_time_series.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
     deps:
     - data-simulation/input/wind_turbines_usa
-    - data-simulation/input/energy_generation
+    - data-simulation/input/p_out_eia
     outs:
     - data-simulation/output/turbine-time-series
   wind_speed_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_wind_speed.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed.py
     deps:
-    - data-simulation/input/energy_generation
+    - data-simulation/input/p_out_eia
     - data-simulation/input/wind_turbines_usa
     - data-simulation/input/wind_velocity_usa_era5
     - src
     - scripts
     outs:
     - data-simulation/interim/wind_speed
-  calc_power_in_wind_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_power_in_wind.py
+  calc_p_in_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_in.py
     deps:
     - data-simulation/output/turbine-time-series
-    - data-simulation/input/energy_generation
+    - data-simulation/input/p_out_eia
     - data-simulation/input/wind_turbines_usa
     - data-simulation/interim/wind_speed
     - src
     outs:
-    - data-simulation/output/power_in_wind
+    - data-simulation/output/p_in
+  convert_gwa_to_netcdf_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/convert_gwa_to_netcdf.py
+    deps:
+    - src
+    - scripts
+    - data-simulation/input/wind_speed_gwa2
+    outs:
+    - data-simulation/interim/wind_speed_gwa
+  calc_bias_correction_gwa_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_bias_correction_gwa.py
+    deps:
+    - src
+    - scripts
+    - data-simulation/input/wind_turbines_usa
+    - data-simulation/interim/wind_speed
+    - data-simulation/interim/wind_speed_gwa
+    outs:
+    - data-simulation/output/bias_correction
+  calc_p_out_model_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_out_model.py
+    deps:
+    - src
+    - scripts
+    - data-simulation/input/wind_turbines_usa
+    #- data-simulation/output/bias_correction TODO
+    - data-simulation/interim/wind_speed
+    outs:
+    - data-simulation/output/p_out_model
   calc_wind_speed_distribution_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_wind_speed_distribution.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed_distribution.py
     deps:
     - data-simulation/input/wind_turbines_usa
     - data-simulation/interim/wind_speed
@@ -163,34 +233,37 @@ stages:
     outs:
     - data-simulation/output/wind_speed_distribution
   checks_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/run_checks.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/run_checks.py
     deps:
-    - data-simulation/input/energy_generation
+    - data-simulation/input/p_out_eia
     - data-simulation/input/wind_turbines_usa
     - data-simulation/interim/wind_speed
-    - data-simulation/output/power_in_wind
+    - data-simulation/output/p_in
     - data-simulation/output/turbine-time-series
+    #- data-simulation/interim/wind_speed_gwa TODO
+    #- data-simulation/output/bias_correction TODO
+    - data-simulation/output/p_out_model
     - src
     - scripts
   figures_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/generate_figures.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/generate_figures.py
     deps:
     - data-simulation/input/wind_turbines_usa
-    - data-simulation/input/energy_generation
-    - data-simulation/output/power_in_wind
+    - data-simulation/input/p_out_eia
+    - data-simulation/output/p_in
     - data-simulation/output/turbine-time-series
     - src
     outs:
     - data-simulation/figures
   data_values_simulation:
-    cmd: SIMULATION=1 PYTHONPATH=${PYTHONPATH}:${PWD} python3 scripts/calc_data_values.py
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_data_values.py
     deps:
     - src
     - scripts
-  build_arxiv:
-    cmd: bash doc/article/build-arxiv.sh
-    deps:
-    - data/output/data-values
-    - doc/figures
-    outs:
-    - doc/article/build
+  #build_arxiv:
+  #  cmd: bash doc/article/build-arxiv.sh
+  #  deps:
+  #  - data/output/data-values
+  #  - doc/figures
+  #  outs:
+  #  - doc/article/build

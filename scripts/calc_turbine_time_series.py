@@ -3,8 +3,8 @@ from src.util import create_folder
 from src.config import OUTPUT_DIR
 from src.load_data import load_turbines
 from src.load_data import load_capacity_irena
-from src.load_data import load_generated_energy_gwh
-from src.load_data import load_generated_energy_gwh_yearly
+from src.load_data import load_p_out_eia_monthly
+from src.load_data import load_p_out_eia
 from src.calculations import calc_is_built
 from src.calculations import calc_rotor_swept_area
 from src.calculations import calc_irena_correction_factor
@@ -15,11 +15,9 @@ from src.logging_config import setup_logging
 setup_logging()
 
 turbines = load_turbines()
-generated_energy_gwh = load_generated_energy_gwh()
-generated_energy_gwh_yearly = load_generated_energy_gwh_yearly()
 
-time = generated_energy_gwh.time
-time_yearly = generated_energy_gwh_yearly.time
+time = load_p_out_eia_monthly().time
+time_yearly = load_p_out_eia().time
 
 output_folder = create_folder("turbine-time-series", prefix=OUTPUT_DIR)
 

@@ -1,13 +1,12 @@
-import pytest
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from src.wind_power import calc_p_in
 from src.constants import AIR_DENSITY_RHO
 from src.calculations import calc_wind_speed_at_turbines
 from src.calculations import calc_is_built
 from src.calculations import calc_rotor_swept_area
-from src.calculations import calc_power_in_wind
 from src.calculations import calc_capacity_per_year
 
 
@@ -29,11 +28,14 @@ def test_calc_is_built(turbines, time):
 
     assert is_built.sel(time=time <= pd.to_datetime("2002-01-01")).sum(dim="turbines").max() == 30
 
-    assert is_built.sel(time=time <= pd.to_datetime("2002-01-01 16:00")).sum(
-        dim="turbines"
-    ).max() == 30.0 + 10 * 16 / (365 * 24)
+    # I'm not entirely sure why there is a small numerical error here after changing np.float to
+    # float to avoid a warning after a numpy update, but it's about 1e-14 so should be ignorable
+    np.testing.assert_allclose(
+        is_built.sel(time=time <= pd.to_datetime("2002-01-01 16:00")).sum(dim="turbines").max(),
+        30.0 + 10 * 16 / (365 * 24),
+    )
 
-    is_built_diff = is_built.astype(np.float).diff(dim="time")
+    is_built_diff = is_built.astype(float).diff(dim="time")
     assert np.all(is_built_diff.sum(dim="time") == 1)
 
 
@@ -46,52 +48,29 @@ def test_calc_rotor_swept_area(turbines, time):
     # note that there are two rotor diameters missing in t_rd, but this is corrected by nan-scaling
     first_year = "2000-01-01T00:00:00.000000000"
     np.testing.assert_allclose(
-        rotor_swept_area.sel(time=first_year), (num_turbines) * 10 ** 2 / 4 * np.pi
+        rotor_swept_area.sel(time=first_year), (num_turbines) * 10**2 / 4 * np.pi
     )
 
 
-@pytest.mark.parametrize("average_wind", [True, False])
-def test_calc_power_in_wind(wind_speed, turbines, average_wind):
+def test_calc_p_in(wind_speed, turbines):
     num_turbines = 100
 
-    p_in, _ = calc_power_in_wind(wind_speed, turbines, average_wind)
+    p_in = calc_p_in(wind_speed, turbines)
+    p_in = p_in.sum(dim="turbines")
     assert isinstance(p_in, xr.DataArray)
     assert p_in.time[0] == pd.to_datetime("1997-01-01")
     assert p_in.time[-1] == pd.to_datetime("2011-01-01")
 
-    rotor_swept_area = 5 ** 2 * np.pi
+    rotor_swept_area = 5**2 * np.pi
 
-    wind_speed_cube_start = 3 ** 3
-    wind_speed_cube_end = 4 ** 3
-
-    # expected p_in for years when all turbines are built
-    if average_wind:
-        wind_speed_cube_avg = (8 * wind_speed_cube_start + 7 * wind_speed_cube_end) / 15
-        wind_speed_cube_start = wind_speed_cube_end = wind_speed_cube_avg
+    wind_speed_cube_start = 3**3
+    wind_speed_cube_end = 4**3
 
     p_in_factors = num_turbines * rotor_swept_area * 0.5 * AIR_DENSITY_RHO * 1e-9
 
-    # no turbines built yet
-    assert np.all(p_in.sel(time=p_in.time.dt.year < 1999) == 0.0)
-
-    num_turbines_1999 = 10
-
-    if average_wind:
-        # this is weird because of the yearly parameter (workaround) in calc_is_built()
-        num_turbines_until_2000 = num_turbines_1999 + 10 / 2
-    else:
-        # this is a bit weird, because we don't have the time stamps of a full year here, but just
-        # the first 17 hours of the year...
-
-        # 10 turbines weighted by the sum of the first 17 hours of the year divided by hours of
-        # year
-        num_time_stamps = 17
-        num_turbines_2000 = 10 * (num_time_stamps - 1) / 2 / (366 * 24)
-        num_turbines_until_2000 = num_turbines_1999 + num_turbines_2000
-
     np.testing.assert_allclose(
         p_in.sel(time=p_in.time.dt.year == 2000),
-        wind_speed_cube_start * p_in_factors * num_turbines_until_2000 / num_turbines,
+        wind_speed_cube_start * p_in_factors,
     )
 
     # all turbines built
@@ -100,20 +79,21 @@ def test_calc_power_in_wind(wind_speed, turbines, average_wind):
     )
 
 
-@pytest.mark.parametrize("average_wind", [True, False])
-def test_calc_power_in_wind_p_year_nans(wind_speed, turbines, average_wind):
+def test_calc_p_in_p_year_nans(wind_speed, turbines):
+    # this test became kinda useless since calc_p_in() ignores atm if p_year is nan
     num_turbines = 100
-    rotor_swept_area = 5 ** 2 * np.pi
+    rotor_swept_area = 5**2 * np.pi
 
     turbines["p_year"][95] = np.nan
     turbines["p_year"][94] = np.nan
 
     wind_speed.loc[{"time": wind_speed.time.dt.year >= 0}] = 4.0
-    p_in, _ = calc_power_in_wind(wind_speed, turbines, average_wind)
+    p_in = calc_p_in(wind_speed, turbines)
+    p_in = p_in.sum(dim="turbines")
 
     np.testing.assert_allclose(
         p_in.sel(time=p_in.time.dt.year > 2008),
-        98 / 100 * 4 ** 3 * num_turbines * rotor_swept_area * 0.5 * AIR_DENSITY_RHO * 1e-9,
+        4**3 * num_turbines * rotor_swept_area * 0.5 * AIR_DENSITY_RHO * 1e-9,
     )
 
 

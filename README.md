@@ -1,22 +1,16 @@
 [![MIT License](https://badgen.net/github/license/inwe-boku/windpower-decomposition-usa)](https://choosealicense.com/licenses/mit/)
 
-System efficiency of US wind power generation is declining
-=========================================================
-
-A decomposition of historical wind power generation data
---------------------------------------------------------
+The decline in specific power reduces wind power density and system efficiency
+==============================================================================
 
 Peter Regner, Katharina Gruber, Sebastian Wehrle, Johannes Schmidt
 
 
-**This repository contains code used for unpublished results. The code updated upon publication of the results.**
+**This repository contains code used for unpublished results. The repository will be updated upon publication of the results.**
 
 
 Abstract
 --------
 
-US Wind power generation has grown significantly over the last decades, mostly driven by more and larger turbines being installed. While growth of wind power generation is necessary to build an energy system with high shares of renewables, the technology also causes negative externalities. The installation of more and larger turbines can, for example, negatively affect wild life and humans.
-
-In theory, technological progress could lead to an increase of system efficiency, i.e. to higher electricity generation in relation to kinetic power in wind at turbine locations, thus reducing impacts by generated unit of power. We therefore assess for the US, which has one of the largest wind power fleets globally, how system efficiency has changed in the period 2010-2020.
-
-For that purpose, we combine wind power generation time series, data on installed wind turbines and wind speed time series from the ERA5 reanalysis to decompose the growth of US wind power generation into its driving factors. These include the number of installed turbines, average rotor swept area, system efficiency, location choice, and hub height. In total, less electric power was extracted by area of swept area in 2020 than 10 years before. This is caused by a declining system efficiency, which can be largely explained by a decrease in the specific power of wind turbines. At the same time, wind power developers were able to increase the wind power input available per unit of rotor swept area, as turbines with larger hub heights and in windier locations have been built, offsetting to some extent the reductions in system efficiency.
+US Wind power generation has grown significantly over the last decades, both in number and average size of operating turbines. A lower specific power, i.e. larger rotor blades relative to wind turbine capacities, allows to increase capacity factors and to reduce cost. However, this development also reduces system efficiency, i.e. the share of power in the wind flowing through rotor swept areas which is converted to electricity. At the same time, also output power density, the amount of electric energy generated per unit of rotor swept area, may decrease due to the decline of specific power. The precise outcome depends, however, on the interplay of wind resources and wind turbine models.
+In this study, we present a decomposition of historical US wind power generation data for the period 2001--2021 to study to which extent the decrease in specific power affected system efficiency and output power density. We show that as a result of a decrease in specific power, system efficiency fell and therefore, output power density was reduced during the last decade. Furthermore, we show that the wind available to turbines has increased substantially due to increases in the average hub height of turbines since 2001. However, site quality has slightly decreased during the last 20 years.

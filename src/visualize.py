@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import xarray as xr
 
@@ -8,12 +10,13 @@ from matplotlib.lines import Line2D
 from src.config import FIGSIZE
 from src.constants import HOURS_PER_YEAR
 from src.calculations import calc_capacity_per_year
+from src.calculations import power_input
 from src.load_data import load_turbines
-from src.load_data import load_generated_energy_gwh_yearly
+from src.load_data import load_p_out_eia
 from src.load_data import load_capacity_irena
+from src.load_data import load_p_in
 from src.util import write_data_value
-from src.util import filter2010
-from src.util import calc_abs_slope
+
 
 # this is actually 1 extra color, we have 4 models ATM
 TURBINE_COLORS = (
@@ -32,14 +35,14 @@ def savefig(fname):
 
 def plot_growth_of_wind_power():
     turbines = load_turbines()
-    generated_energy_gwh_yearly = load_generated_energy_gwh_yearly()
+    p_out_eia = load_p_out_eia()
 
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
 
     per_year = turbines.t_cap.groupby(turbines.p_year)
     capacity_yearly_gw = per_year.sum(dim="turbines").cumsum() * 1e-6
     capacity_yearly_gw = capacity_yearly_gw.isel(
-        p_year=capacity_yearly_gw.p_year >= generated_energy_gwh_yearly.time.dt.year.min()
+        p_year=capacity_yearly_gw.p_year >= p_out_eia.time.dt.year.min()
     )
 
     capacity_yearly_gw.plot(
@@ -57,8 +60,8 @@ def plot_growth_of_wind_power():
 
     ax2 = ax.twinx()
     ax2.plot(
-        generated_energy_gwh_yearly.time.dt.year,
-        generated_energy_gwh_yearly * 1e-3,
+        p_out_eia.time.dt.year,
+        p_out_eia * 1e-3 * HOURS_PER_YEAR,
         label="Yearly power generation (TWh/year)",
         marker="o",
         color="#0d8085",
@@ -69,135 +72,93 @@ def plot_growth_of_wind_power():
     return fig
 
 
-def plot_relative_change(data, label="", ax=None):
-    # this is probably not a good idea... very weird stuff happens when calculating changes
-    # in percent points...
+def plot_growth_and_specific_power():
+    from src.loaded_files import turbines
+    from src.loaded_files import is_built
+    from src.loaded_files import num_turbines_built
+    from src.loaded_files import specifc_power_per_year
+    from src.loaded_files import rotor_swept_area_avg
+
+    fig, axes = plt.subplots(4, figsize=FIGSIZE, sharex=True)
+
+    # might fix spacing for titles
+    fig.tight_layout(h_pad=2)
+
+    ((turbines.t_hh * is_built).sum(dim="turbines") / num_turbines_built).plot.line(
+        color="k", ax=axes[0]
+    )
+    axes[0].set_title("Average hub height")
+    axes[0].set_ylabel("m")
+
+    ((turbines.t_cap * is_built).sum(dim="turbines") / num_turbines_built).plot.line(
+        color="k", ax=axes[1]
+    )
+    axes[1].set_title("Average capacity")
+    axes[1].set_ylabel("KW")
+
+    rotor_swept_area_avg.plot.line(color="k", ax=axes[2])
+    axes[2].set_title("Average rotor swept area")
+    axes[2].set_ylabel("m²")
+
+    specifc_power_per_year.plot.line(color="k", ax=axes[3])
+    axes[3].set_title("Average specific power (W/m²)")
+    axes[3].set_ylabel("W/m²")
+
+    for ax in axes:
+        ax.set_xlabel("")
+        ax.grid()
+
+    return fig
+
+
+def plot_relative(data, unit="", ax=None, **kwargs):
     if ax is None:
         ax = plt  # ok that's a bit crazy
     ax.plot(
-        data.time[1:],
-        100 * np.diff(data / data[0]),
-        "o-",
-        label=label,
+        data.time[:],
+        100 * data / data[0],
+        # "o-",
+        **kwargs,
     )
 
 
-def plot_relative(data, data_monthly=None, unit="", ax=None, **kwargs):
+def plot_absolute(data, unit="", ax=None, **kwargs):
     if ax is None:
         ax = plt  # ok that's a bit crazy
-    ax.plot(data.time[:], 100 * data / data[0], "o-", **kwargs)
-
-
-def plot_absolute(data, data_monthly=None, unit="", ax=None, **kwargs):
-    if ax is None:
-        ax = plt  # ok that's a bit crazy
-    ax.plot(data.time[:], data, "o-", **kwargs)
-    if data_monthly is not None:
-        data_monthly.plot.line("-", alpha=0.4, **kwargs)
+    ax.plot(
+        data.time[:],
+        data,
+        # "o-",
+        **kwargs,
+    )
 
     if unit:
-        plt.ylabel(unit)
+        ax.set_ylabel(unit)
 
 
-def plot_decomposition_p_out(
-    num_turbines_built,
-    rotor_swept_area,
-    generated_energy_gwh_yearly,
-    p_in,
-    p_in_avg,
-    p_in_avg80,
-    generated_energy_gwh,
-    p_in_monthly,
-    rotor_swept_area_monthly,
-    plot_only=None,
-    absolute_plot=False,
-    fig=None,
-    ax=None,
-):
+def plot_timeseries_figure(figure_params, ax=None, fig=None):
+    plot_line = plot_absolute if figure_params.absolute_plot else plot_relative
+
     if ax is None or fig is None:
         fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
 
-    plot_it = plot_absolute if absolute_plot else plot_relative
-
-    if plot_only is None or "rotor_swept_area" in plot_only:
-        plot_it(
-            rotor_swept_area / num_turbines_built,
-            label="Average rotor swept area",
-            unit="m²",
+    for line_params in figure_params.lines:
+        plot_line(
+            data=line_params.data,
+            unit=figure_params.unit,
+            label=line_params.label,
+            color=line_params.color,
+            linestyle=line_params.linestyle,
+            linewidth=line_params.linewidth,
             ax=ax,
-            color=TURBINE_COLORS[1],
         )
 
-    if plot_only is None or "number" in plot_only:
-        plot_it(
-            num_turbines_built * 1e-3,
-            label="Number of operating turbines",
-            unit="in thousands",
-            ax=ax,
-            color=TURBINE_COLORS[2],
-        )
+    if not figure_params.absolute_plot:
+        ax.axhline(100, color="k", linewidth=1)
+        ax.set_ylabel(f"Relative to {int(line_params.data.time.dt.year[0])} (%)")
 
-    if plot_only is None or "efficiency" in plot_only:
-        # FIXME "12 / HOURS_PER_YEAR" is a rough estimate, because hours per month vary
-        plot_it(
-            data=100 * generated_energy_gwh_yearly / p_in / HOURS_PER_YEAR,
-            # TODO doesn't make sense that way, needs to be shifted by 6 monhts
-            # data_monthly=(generated_energy_gwh / HOURS_PER_YEAR / p_in_monthly * 100 * 12),
-            label="System efficiency",
-            unit="%",
-            ax=ax,
-            color=TURBINE_COLORS[3],
-        )
-
-    if "outputpowerdensity" in plot_only:
-        outputpowerdensity = 1e9 * generated_energy_gwh_yearly / HOURS_PER_YEAR / rotor_swept_area
-        plot_it(
-            outputpowerdensity,
-            # TODO doesn't make sense that way, needs to be shifted by 6 monhts
-            # data_monthly=(1e9 * p_in_monthly / rotor_swept_area_monthly),
-            label="Output power density",
-            unit="W/m²",
-            ax=ax,
-            color=TURBINE_COLORS[4],
-        )
-
-    if plot_only is None or "powerdensity" in plot_only:
-        plot_it(
-            1e9 * p_in / rotor_swept_area,
-            # TODO doesn't make sense that way, needs to be shifted by 6 monhts
-            # data_monthly=(1e9 * p_in_monthly / rotor_swept_area_monthly),
-            label="Input power density",
-            unit="W/m²",
-            ax=ax,
-            color=TURBINE_COLORS[4],
-        )
-
-    if plot_only is None or "powerdensity-avg" in plot_only:
-        plot_it(
-            1e9 * p_in_avg / rotor_swept_area,
-            label="Input power density, wind averaged",
-            unit="W/m²",
-            ax=ax,
-            color=TURBINE_COLORS[4],
-            linestyle="--",
-        )
-    if plot_only is None or "powerdensity-avg-80" in plot_only:
-        plot_it(
-            1e9 * p_in_avg80 / rotor_swept_area,
-            label="Input power density at 76m, wind averaged",
-            unit="W/m²",
-            ax=ax,
-            color=TURBINE_COLORS[4],
-            linestyle=":",
-        )
-
-    if not absolute_plot:
-        plt.axhline(100, color="k", linewidth=1)
-        plt.ylabel(f"Relative to {int(rotor_swept_area.time.dt.year[0])} (%)")
-
-    plt.legend()
-
-    plt.grid()
+    ax.legend()
+    ax.grid()
 
     return fig, ax
 
@@ -281,7 +242,7 @@ def plot_waterfall(
             plt.plot(
                 bar_centers(i),
                 dataset.values,
-                "o-k",
+                "ok",
                 markersize=5,
                 zorder=15,
                 label=label_total,
@@ -302,57 +263,31 @@ def plot_waterfall(
     return fig, ax
 
 
-def plot_effect_trends_pin(datasets, baseline, labels, colors):
+def plot_effect_trends_power(name, datasets, baseline, labels, colors, ax=None, fig=None):
     assert np.all(
         len(datasets[0]) == np.array([len(dataset) for dataset in datasets])
     ), "all datasets must be of same length"
 
-    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-
-    # this was used only for the one-slide-presentation for the EGU
-    # ax.yaxis.set_label_position("right")
-    # ax.yaxis.tick_right()
+    if ax is None or fig is None:
+        fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
 
     previous = baseline
     for i, (label, dataset, color) in enumerate(zip(labels, datasets, colors)):
         dataset_relative = dataset - previous
-        dataset_relative.plot.line("o-", label=label, color=color, zorder=25)
+        dataset_relative.plot.line("-", label=label, color=color, zorder=25)
         previous = dataset
-
-        # this is a bit ugly :-/
-        if dataset.isel(time=0).time.dt.year == 2010:
-            label_no_space = label.replace(" ", "-").lower()
-            write_data_value(
-                f"inputpowerdensity_{label_no_space}",
-                f"{(dataset_relative[-1] - dataset_relative[0]).values:.1f}",
-            )
-            if label == "Wind change due to new locations":
-                write_data_value(
-                    f"inputpowerdensity_{label_no_space}_until2013_abs",
-                    f"{abs(float(dataset_relative.sel(time='2013') - dataset_relative[0])):.1f}",
-                )
-                write_data_value(
-                    f"inputpowerdensity_{label_no_space}_since2013",
-                    f"{float(dataset_relative[-1] - dataset_relative.sel(time='2013')):.1f}",
-                )
-
-            if label == "Annual variations":
-                for extremum in ("min", "max"):
-                    write_data_value(
-                        f"inputpowerdensity_{label_no_space}_{extremum}",
-                        f"{getattr(dataset_relative, extremum)().values:.1f}",
-                    )
 
     for label in ax.get_xmajorticklabels():
         label.set_rotation(0)
         label.set_horizontalalignment("center")
 
-    plt.axhline(0, color="k", linewidth=1, zorder=5)
+    ax.axhline(0, color="k", linewidth=1, zorder=5)
 
-    plt.legend()
+    ax.legend()
     ax.grid(zorder=0)
-    plt.ylabel("Change in input power density (W/m²)")
-    plt.xlabel("")
+    name_tex = "P_\\mathrm{" + name[2:] + "}"
+    ax.set_ylabel("Change in $\\frac{" + name_tex + "}{A}$ (W/m²)")
+    ax.set_xlabel("")
 
     return fig, ax
 
@@ -415,9 +350,10 @@ def plot_irena_capacity_validation(turbines, turbines_with_nans):
 
     plt.grid()
 
-    xlim = ax.get_xlim()
-    plt.xlim(*xlim)
-    plt.axvspan(xlim[0] - 10, 2010, facecolor="k", alpha=0.07)
+    # Plot gray area to indicate period of uncertainty:
+    # xlim = ax.get_xlim()
+    # plt.xlim(*xlim)
+    # plt.axvspan(xlim[0] - 10, 2010, facecolor="k", alpha=0.07)
 
     handles, labels = plt.gca().get_legend_handles_labels()
     line = Line2D([0], [0], label="without data imputation", linestyle="--", color="k")
@@ -446,6 +382,9 @@ def plot_irena_capacity_validation(turbines, turbines_with_nans):
 
 
 def plot_missing_uswtdb_data():
+    from src.loaded_files import is_built
+    from src.loaded_files import num_turbines_built
+
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
 
     turbines = load_turbines(replace_nan_values="")
@@ -454,35 +393,32 @@ def plot_missing_uswtdb_data():
     is_metadata_missing_rd = np.isnan(turbines.t_rd)
     is_metadata_missing_cap = np.isnan(turbines.t_cap)
 
-    num_turbines_per_year = turbines.p_year.groupby(turbines.p_year).count()
-
-    num_missing_hh_per_year = is_metadata_missing_hh.groupby(turbines.p_year).sum()
-    num_missing_rd_per_year = is_metadata_missing_rd.groupby(turbines.p_year).sum()
-    num_missing_cap_per_year = is_metadata_missing_cap.groupby(turbines.p_year).sum()
+    num_missing_hh_per_year = (is_metadata_missing_hh * is_built).sum(dim="turbines")
+    num_missing_rd_per_year = (is_metadata_missing_rd * is_built).sum(dim="turbines")
+    num_missing_cap_per_year = (is_metadata_missing_cap * is_built).sum(dim="turbines")
 
     # note: this assumes that a turbine with installation year x is already operating in year x
-    (100 * num_missing_hh_per_year.cumsum() / num_turbines_per_year.cumsum()).plot.line(
+    (100 * num_missing_hh_per_year / num_turbines_built).plot.line(
         label="Hub height",
         color=TURBINE_COLORS[1],
         ax=ax,
     )
-    (100 * num_missing_rd_per_year.cumsum() / num_turbines_per_year.cumsum()).plot(
+    (100 * num_missing_rd_per_year / num_turbines_built).plot(
         label="Rotor diameter",
         color=TURBINE_COLORS[3],
         ax=ax,
     )
-    percent_missing_cap_per_year = (
-        100 * num_missing_cap_per_year.cumsum() / num_turbines_per_year.cumsum()
-    )
+    percent_missing_cap_per_year = 100 * num_missing_cap_per_year / num_turbines_built
     percent_missing_cap_per_year.plot(
         label="Capacity",
         color=TURBINE_COLORS[4],
         ax=ax,
     )
-    for year in (2000, 2010):
+
+    for year in (2001, 2011):
         write_data_value(
             f"percent_missing_capacity_per_year{year}",
-            f"{percent_missing_cap_per_year.sel(p_year=year).values:.0f}",
+            f"{percent_missing_cap_per_year.sel(time=str(year)).values[0]:.0f}",
         )
 
     plt.legend()
@@ -493,122 +429,84 @@ def plot_missing_uswtdb_data():
     return fig
 
 
-def plot_scatter_efficiency_input_power_density(
-    p_in_monthly, rotor_swept_area_monthly, efficiency_monthly
-):
+def plot_scatter_efficiency_input_power_density():
+    from src.loaded_files import p_out_model_raw
+    from src.loaded_files import d_in
+    from src.loaded_files import efficiency
+    from src.loaded_files import specific_power
+    from src.loaded_files import turbines
+
     fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
+
+    p_in_raw = load_p_in(avgwind=False, refheight=False, aggregate=False)
+
+    rotor_swept_area_raw = turbines.t_rd**2 * np.pi / 4
+    d_in_raw = (1e9 * p_in_raw / rotor_swept_area_raw).load()
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            action="ignore",
+            category=RuntimeWarning,
+            message="invalid value encountered in true_divide",
+        )
+        efficiency_raw = 100 * (p_out_model_raw / p_in_raw).load()
+
+    N = 2000
+    np.random.seed(42)
+    idcs = np.unique(np.random.randint(0, p_in_raw.sizes["turbines"], N))
+
+    plt.grid()
+
     plt.scatter(
-        1e9 * p_in_monthly / rotor_swept_area_monthly,
-        efficiency_monthly,
-        c=p_in_monthly.time.dt.year,
+        d_in,
+        efficiency,
+        c=TURBINE_COLORS[4],
+        label="All turbines aggregated",
+        zorder=10,
+    )
+
+    scatter_turbines = plt.scatter(
+        d_in_raw.isel(turbines=idcs),
+        efficiency_raw.isel(turbines=idcs),
+        c=xr.broadcast(specific_power.isel(turbines=idcs), p_in_raw.isel(turbines=idcs))[0],
         cmap="cividis",
-    )
-    plt.colorbar()
-    plt.xlabel("Power density (W/m²)")
-    plt.ylabel("Efficiency (%)")
-    plt.grid()
-
-    return fig
-
-
-def plot_system_effiency(
-    efficiency,
-    efficiency_without_pin,
-    efficiency_monthly=None,
-    efficiency_without_pin_monthly=None,
-):
-    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-
-    (100 * efficiency).plot.line("o-", color=TURBINE_COLORS[3], label="System efficiency")
-    (100 * efficiency_without_pin).plot.line(
-        "--o", color=TURBINE_COLORS[3], label="Scenario with constant input power density"
+        s=3,
+        label=f"{N} random samples of single turbines",
     )
 
-    if efficiency_monthly is not None:
-        (100 * efficiency_monthly).plot.line(
-            "o-", color=TURBINE_COLORS[4], label="Monthly system efficiency, aggregated yearly"
-        )
-        (100 * efficiency_without_pin_monthly).plot.line(
-            "--o",
-            color=TURBINE_COLORS[4],
-            label=("Scenario using monthly time series, aggregated yearly"),
-        )
+    plt.colorbar(label="Specific power (W/m²)")
 
-    for label in ax.get_xmajorticklabels():
-        label.set_rotation(0)
-        label.set_horizontalalignment("center")
+    handles, labels = plt.gca().get_legend_handles_labels()
+    handles[1] = scatter_turbines.legend_elements(prop="sizes")[0][0]
 
-    plt.grid()
-
-    plt.legend()
-    plt.xlabel("")
+    plt.xlabel("Input power density (W/m²)")
     plt.ylabel("System efficiency (%)")
-
-    # this should be better placed in scripts/calc_data_values.py but would cause a lot of code
-    # duplication without large re-organization, so let's keep it here
-    if efficiency_monthly is None:
-        write_data_value(
-            "efficiency_without_pin_yearly_start",
-            f"{100 * efficiency_without_pin[0].values:.1f}",
-        )
-        write_data_value(
-            "efficiency_without_pin_yearly_end",
-            f"{100 * efficiency_without_pin[-1].values:.1f}",
-        )
-        write_data_value(
-            "efficiency_yearly_start",
-            f"{100 * efficiency.values[0]:.1f}",
-        )
-        write_data_value(
-            "efficiency_yearly_end",
-            f"{100 * efficiency.values[-1]:.1f}",
-        )
-
-        write_data_value(
-            "efficiency_without_pin_yearly_slope",
-            f"{100 * calc_abs_slope(efficiency_without_pin):.2f}",
-        )
-        write_data_value(
-            "efficiency_yearly_slope",
-            f"{100 * calc_abs_slope(efficiency):.2f}",
-        )
-
-    return fig
-
-
-def plot_capacity_factors(turbines, generated_energy_gwh_yearly, is_built_yearly):
-    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
-
-    total_capacity_kw = (is_built_yearly * turbines.t_cap).sum(dim="turbines")
-
-    capacity_factors = (
-        100
-        * 1e6
-        * filter2010(generated_energy_gwh_yearly / HOURS_PER_YEAR)
-        / filter2010(total_capacity_kw)
-    )
-
-    capacity_factors.plot.line("o-", color=TURBINE_COLORS[4])
-
-    plt.xlabel("")
-    plt.ylabel("Capacity factor (%)")
-    plt.grid()
+    plt.legend(handles, labels)
 
     return fig
 
 
 def plot_irena_poweroutput_validation(p_out_eia, p_out_irena):
+    # TODO this plot is obsolete, remove or just keep?
     fig, axes = plt.subplots(2, figsize=FIGSIZE, sharex=True)
 
-    (1e-3 * p_out_eia).plot.line(label="EIA", ax=axes[0], color=TURBINE_COLORS[3], marker="o")
-    (1e-3 * p_out_irena).plot.line(label="IRENA", ax=axes[0], color=TURBINE_COLORS[4], marker="o")
+    (1e-3 * HOURS_PER_YEAR * p_out_eia).plot.line(
+        label="EIA",
+        ax=axes[0],
+        color=TURBINE_COLORS[3],
+    )
+    (1e-3 * HOURS_PER_YEAR * p_out_irena).plot.line(
+        label="IRENA",
+        ax=axes[0],
+        color=TURBINE_COLORS[4],
+    )
     axes[0].set_ylabel("Power output (TWh/Year)")
     axes[0].set_xlabel("")
     axes[0].grid()
     axes[0].legend()
 
     rel_difference = 100 * p_out_irena / p_out_eia - 100
-    rel_difference.plot.line(label="Relative difference (IRENA - EIA)", color="k", marker="o")
+    rel_difference.plot.line(label="Relative difference (IRENA - EIA)", color="k")
 
     plt.ylabel("Relative difference (%)")
     plt.xlabel("")
@@ -619,6 +517,164 @@ def plot_irena_poweroutput_validation(p_out_eia, p_out_irena):
     write_data_value(
         "irena_poweroutput_max_deviation",
         f"{float(rel_difference.max()):.1f}",
+    )
+
+    return fig
+
+
+def plot_efficiency_ge1577_example(
+    wind_speed,
+    wind_speed_linspace,
+    p_in,
+    p_out,
+    c_p,
+    pout_monthly_aggregated,
+    pin_monthly_aggregated,
+    rotor_swept_area,
+    turbine_idcs,
+    colors,
+):
+
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(14, 16))  # , sharex='col', sharey='row')
+
+    # set shared x and y axis
+    for row in (0, 1):
+        for col in (0, 1):
+            axes[row, 0].sharey(axes[row, 1])
+            axes[row, col].sharex(axes[row + 1, col])
+            plt.setp(axes[row, col].get_xticklabels(), visible=False)
+
+    for ax1 in axes:
+        for ax2 in ax1:
+            ax2.grid()
+
+    axes[0, 0].plot(
+        wind_speed_linspace, p_out * 1e-3, color="k", label="Power curve (GE-1.5-77sl model)"
+    )
+    axes[0, 0].set_ylabel("Power output (KW)")
+    axes[0, 0].legend()
+
+    axes[0, 0].set_xlim(0, 20)
+
+    axes[1, 0].plot(wind_speed_linspace, c_p, "k", label="$C_p$ (GE-1.5-77sl model)")
+    axes[1, 0].axhline(16 / 27, label="Betz' limit", color="k", linestyle=":")
+    axes[1, 0].set_ylabel("Efficiency (%)")
+    axes[1, 0].legend()
+
+    for turbine_idx, color in zip(turbine_idcs, colors):
+        wind_speed_location = wind_speed.sel(turbines=turbine_idx)
+        axes[2, 0].hist(
+            wind_speed_location,
+            histtype="step",
+            bins=50,
+            color=color,
+            density=True,
+            alpha=1,
+        )
+        axes[2, 1].hist(
+            power_input(wind_speed_location, rotor_swept_area) / rotor_swept_area,
+            bins=50,
+            histtype="step",
+            color=color,
+            density=True,
+            alpha=1,
+        )
+
+    axes[2, 0].set_ylabel("Probability density")
+    axes[2, 0].set_xlabel("Wind speed (m/s)")
+
+    axes[0, 1].plot(p_in / rotor_swept_area, p_out * 1e-3, color="k")
+    axes[0, 1].set_ylabel("Power output (KW)")
+
+    _location_scatter_plot(
+        axes[1, 1],
+        p_in,
+        rotor_swept_area,
+        c_p,
+        pin_monthly_aggregated,
+        pout_monthly_aggregated,
+        colors,
+    )
+    axes[1, 1].axhline(16 / 27, label="Betz' limit", color="k", linestyle=":")
+    axes[1, 1].set_xlim(0, (p_in / rotor_swept_area)[-1])
+
+    for col, label in zip((0, 1), ["Wind speeds", "Input power density"]):
+        marker = Line2D([], [], color="k", label=f"{label} at selected turbine locations")
+        axes[2, col].legend(handles=[marker])
+
+    axes[2, 1].set_xlabel("Input power density (W/m²)")
+    axes[2, 1].set_ylabel("Probability density")
+
+    # no idea why the rect parameter necessary to avoid clipping of axis labels, but seems to look
+    # good now by choosing arbitrary values
+    # https://stackoverflow.com/a/6776578/859591
+    plt.tight_layout(rect=(0.0, 0.5, 1.0, 1.0))
+
+    return fig
+
+
+def _location_scatter_plot(
+    ax,
+    p_in,
+    rotor_swept_area,
+    c_p,
+    pin_monthly_aggregated,
+    pout_monthly_aggregated,
+    colors,
+    zoom=False,
+):
+    ax.plot(
+        p_in / rotor_swept_area,
+        c_p,
+        "-k",
+        label="$C_p$ (GE-1.5-77sl model)",
+    )
+
+    ax.set_ylabel("Efficiency (%)")
+    markersize = 3 if zoom else 1.2
+    ax.set_prop_cycle(color=colors)
+    ax.plot(
+        pin_monthly_aggregated / rotor_swept_area,
+        pout_monthly_aggregated / pin_monthly_aggregated,
+        "o",
+        markersize=markersize,
+        alpha=1 if zoom else 0.5,
+        markeredgewidth=0,
+    )
+
+    handles, labels = ax.get_legend_handles_labels()
+
+    marker = Line2D(
+        [],
+        [],
+        color="k",
+        marker="o",
+        markersize=markersize,
+        label="Efficiency monthly aggregated",
+        linewidth=0,
+    )
+    ax.legend(handles=handles + [marker])
+
+    if zoom:
+        ax.set_xlabel("Input power density (W/m²)")
+        ax.set_xlim(20, 1000, auto=True)
+        ax.set_ylim(0.2, 0.45, auto=True)
+
+
+def plot_efficiency_ge1577_example_zoom(
+    p_in, rotor_swept_area, c_p, pin_monthly_aggregated, pout_monthly_aggregated, colors
+):
+    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
+
+    _location_scatter_plot(
+        ax,
+        p_in,
+        rotor_swept_area,
+        c_p,
+        pin_monthly_aggregated,
+        pout_monthly_aggregated,
+        colors,
+        zoom=True,
     )
 
     return fig

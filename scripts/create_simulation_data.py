@@ -9,7 +9,9 @@ import xarray as xr
 from src.config import YEARS
 from src.config import MONTHS
 from src.config import INPUT_DIR
+from src.config import OUTPUT_DIR
 from src.config import DATA_DIR
+from src.config import OFFSHORE_TURBINES
 from src.util import create_folder
 from src.constants import HOURS_PER_YEAR
 from src.load_data import load_turbines
@@ -88,7 +90,7 @@ def create_turbines(save_to_file=True):
     )
     t_rd = normal_random(
         start=100,
-        end=200,
+        end=130,
         size=num_turbines,
         minimum=10.0,
         nanratio=0.12,
@@ -100,6 +102,12 @@ def create_turbines(save_to_file=True):
         minimum=30.0,
         nanratio=0.10,
     )
+
+    # these turbines are offshore and discarded in load_turbines()
+    case_id[-len(OFFSHORE_TURBINES) :] = [turbine["id"] for turbine in OFFSHORE_TURBINES]
+    xlong[-len(OFFSHORE_TURBINES) :] = [turbine["xlong"] for turbine in OFFSHORE_TURBINES]
+    ylat[-len(OFFSHORE_TURBINES) :] = [turbine["ylat"] for turbine in OFFSHORE_TURBINES]
+    p_year[-len(OFFSHORE_TURBINES) :] = [2020 for _ in OFFSHORE_TURBINES]
 
     turbines = xr.Dataset(
         {
@@ -116,18 +124,20 @@ def create_turbines(save_to_file=True):
     # in the real dataset there are no rotor diameters in 2020
     turbines["t_rd"] = turbines.t_rd.where(turbines.p_year != 2020)
 
-    if save_to_file:
-        turbines_df = turbines.to_dataframe()
-        turbines_df.index.names = ["case_id"]
-        fname = create_folder("wind_turbines_usa", prefix=INPUT_DIR) / "uswtdb_v3_0_1_20200514.csv"
+    if not save_to_file:
+        return turbines
 
-        # this is just too dangerous...
-        if op.exists(fname):
-            raise RuntimeError(
-                "CSV file for turbines already exists, won't overwrite, " f"path: {fname}"
-            )
+    turbines_df = turbines.to_dataframe()
+    turbines_df.index.names = ["case_id"]
+    fname = create_folder("wind_turbines_usa", prefix=INPUT_DIR) / "uswtdb_v3_0_1_20200514.csv"
 
-        turbines_df.to_csv(fname)
+    # this is just too dangerous...
+    if op.exists(fname):
+        raise RuntimeError(
+            "CSV file for turbines already exists, won't overwrite, " f"path: {fname}"
+        )
+
+    turbines_df.to_csv(fname)
 
     # add just one (made up) turbine to the decommissioning set, to test reading the Excel file
     turbines_decomissioned = pd.DataFrame(
@@ -176,9 +186,26 @@ def create_turbines(save_to_file=True):
     )
     turbines_decomissioned = turbines_decomissioned.set_index("case_id")
     turbines_decomissioned.to_excel(
-        INPUT_DIR / "wind_turbines_usa" / "decom_clean_032520.xlsx",
+        INPUT_DIR / "wind_turbines_usa" / "uswtdb_decom_clean_091521.xlsx",
         engine="openpyxl",
     )
+
+    header = (
+        "case_id,faa_ors,faa_asn,usgs_pr_id,eia_id,t_state,t_county,t_fips,p_name,p_year,"
+        "p_tnum,p_cap,t_manu,t_model,t_cap,t_hh,t_rd,t_rsa,t_ttlh,retrofit,retrofit_year,"
+        "t_conf_atr,t_conf_loc,t_img_date,t_img_srce,xlong,ylat\n"
+    )
+
+    turbine_str = (
+        "3063607,,2013-WTW-2712-OE,,,GU,Guam,66010,Guam Power Authority Wind Turbine,2016,1,"
+        "0.275,Vergnet,GEV MP-C,275,55,32,804.25,71,0,,2,3,8/10/2017,Digital Globe,144.722656,"
+        "13.389381\n"
+    )
+    for fname in ("uswtdb_v4_1_20210721.csv", "uswtdb_v5_0_20220427.csv"):
+        # just a static CSV file with one turbine which is actually removed in load_turbines()
+        with open(INPUT_DIR / "wind_turbines_usa" / fname, "w") as f:
+            f.write(header)
+            f.write(turbine_str)
 
     return turbines
 
@@ -234,7 +261,7 @@ def create_wind_velocity():
             wind_velocity.to_netcdf(path)
 
 
-def create_energy_generation():
+def create_p_out_eia():
     timestamps = [f"{year}{month:02d}" for year in YEARS for month in MONTHS]
 
     timestamps += [f"{YEARS[-1] + 1}{month:02d}" for month in MONTHS[:3]]
@@ -244,16 +271,34 @@ def create_energy_generation():
     )
     values = np.repeat(energy_yearly / 12.0, 12)
 
-    energy_generation = {"series": [{"data": list(zip(timestamps, values))}]}
-    path = create_folder("energy_generation", prefix=INPUT_DIR)
+    p_out_eia = {"series": [{"data": list(zip(timestamps, values))}]}
+    path = create_folder("p_out_eia", prefix=INPUT_DIR)
     with open(path / "ELEC.GEN.WND-US-99.M.json", "w") as f:
-        json.dump(energy_generation, f)
+        json.dump(p_out_eia, f)
+
+
+def create_p_out_irena():
+    fname = create_folder("p_out_irena", prefix=INPUT_DIR) / "irena-us-generation.csv"
+    with open(fname, "w") as f:
+        f.write(
+            "2010;95.148\n"
+            "2011;120.987\n"
+            "2012;140.222\n"
+            "2013;160.000\n"
+            "2014;180.000\n"
+            "2015;190.000\n"
+            "2016;215.000\n"
+            "2017;250.000\n"
+            "2018;275.000\n"
+            "2019;295.456\n"
+            "2020;300.123\n"
+        )
 
 
 def create_irena_capcity_db():
     irena_db = pd.DataFrame(
         {
-            "Year": np.arange(2000, 2020, dtype=np.float),
+            "Year": np.arange(2000, 2020, dtype=float),
             "Country": "USA",
             "Indicator": "Capacity",
             "Unit": "MW",
@@ -267,14 +312,58 @@ def create_irena_capcity_db():
     irena_db.at[19, "Value"] = np.nan
     irena_db.at[19, "Year"] = np.nan
 
-    fname = create_folder("irena-database", prefix=INPUT_DIR) / "irena-2020-02-26-1.7.feather"
+    fname = create_folder("capacity_irena", prefix=INPUT_DIR) / "irena-2022-06-03-2.feather"
     irena_db.to_feather(fname)
+
+
+def create_biascorrection():
+    output_path = create_folder("bias_correction", prefix=OUTPUT_DIR)
+
+    turbines = load_turbines()
+    bias_correction = xr.DataArray(
+        np.ones(turbines.sizes["turbines"]),
+        dims="turbines",
+        coords={
+            "turbines": turbines.turbines,
+            "x": turbines.xlong,
+            "y": turbines.ylat,
+            "longitude": turbines.xlong,
+            "latitude": turbines.ylat,
+        },
+    )
+
+    for height in (50, 100, 250):
+        ((1 + height / 1e3) * bias_correction).to_netcdf(
+            output_path / f"bias_correction_factors_gwa2_{height}m.nc"
+        )
+
+
+def create_power_curve_modell():
+    fname = create_folder("power_curve_modell", prefix=INPUT_DIR) / "table_a_b_constants.csv"
+
+    # this creates a linear power curve from 0m/s to 25m/s for all specific powers
+    capacity_factors = np.arange(1, 101, dtype=float)  # in percent
+    max_wind = 25
+    A = max_wind / 100 * capacity_factors
+    A = np.log(A)
+
+    AB = pd.DataFrame(
+        {
+            "CF": capacity_factors,
+            "A": A,
+            "B": np.zeros(100),
+        }
+    )
+    AB.to_csv(fname, sep="\t")
 
 
 if __name__ == "__main__":
     os.makedirs(DATA_DIR, exist_ok=True)
     setup_logging()
-    create_energy_generation()
+    create_p_out_eia()
+    create_p_out_irena()
     create_turbines()
     create_wind_velocity()
     create_irena_capcity_db()
+    create_biascorrection()
+    create_power_curve_modell()

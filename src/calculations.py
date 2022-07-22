@@ -1,14 +1,14 @@
 import logging
-
 import dask as da
 import numpy as np
-import pandas as pd
 import xarray as xr
 
+from dask.diagnostics import ProgressBar
+
 from src.util import centers
+from src.constants import AIR_DENSITY_RHO
 from src.config import CHUNK_SIZE_TURBINES
 from src.config import CHUNK_SIZE_TIME
-from src.constants import AIR_DENSITY_RHO
 
 
 def calc_wind_speed_at_turbines(wind_velocity, turbines, height=100.0):
@@ -31,17 +31,22 @@ def calc_wind_speed_at_turbines(wind_velocity, turbines, height=100.0):
         may contain NaNs! (see above)
 
     """
-    # interpolate at turbine locations
-    with da.config.set(**{"array.slicing.split_large_chunks": True}):
+    # XXX no idea what the right choice is here, but at least for calc_bias_correction() the value
+    # False seems to require less RAM and True more than we have.
+    # https://docs.dask.org/en/stable/array-slicing.html
+    # https://docs.dask.org/en/stable/array-chunks.html#array-chunks
+    with da.config.set(**{"array.slicing.split_large_chunks": False}):
+        # interpolate at turbine locations
         wind_velocity_at_turbines = wind_velocity.interp(
             longitude=xr.DataArray(turbines.xlong.values, dims="turbines"),
             latitude=xr.DataArray(turbines.ylat.values, dims="turbines"),
             method="linear",
+            kwargs={"bounds_error": True},
         )
 
     # velocity --> speed
     wind_speed100 = (
-        wind_velocity_at_turbines.u100 ** 2 + wind_velocity_at_turbines.v100 ** 2
+        wind_velocity_at_turbines.u100**2 + wind_velocity_at_turbines.v100**2
     ) ** 0.5
 
     height_attr = height
@@ -54,7 +59,7 @@ def calc_wind_speed_at_turbines(wind_velocity, turbines, height=100.0):
         # we want wind speed to be NaN if hub height is missing to have a consistent NaN scaling
         height = height * (turbines.t_hh - turbines.t_hh + 1)
 
-    wind_speed10 = (wind_velocity_at_turbines.u10 ** 2 + wind_velocity_at_turbines.v10 ** 2) ** 0.5
+    wind_speed10 = (wind_velocity_at_turbines.u10**2 + wind_velocity_at_turbines.v10**2) ** 0.5
 
     powerlaw_alpha = np.log10(wind_speed100 / wind_speed10)
     wind_speed = wind_speed100 * (height / 100.0) ** powerlaw_alpha
@@ -63,6 +68,43 @@ def calc_wind_speed_at_turbines(wind_velocity, turbines, height=100.0):
     wind_speed.attrs["height"] = height_attr
 
     return wind_speed
+
+
+def calc_wind_speed_at_turbines_gwa(wind_speed_gwa, turbines):
+    # TODO merge this function with function above simply by renaming x/y variables
+    wind_speed_at_turbines_gwa = wind_speed_gwa.interp(
+        x=xr.DataArray(turbines.xlong.values, dims="turbines"),
+        y=xr.DataArray(turbines.ylat.values, dims="turbines"),
+        method="linear",
+        kwargs={"bounds_error": True},
+    )
+
+    return wind_speed_at_turbines_gwa
+
+
+def calc_bias_correction(turbines, wind_velocity_era5, wind_speed_gwa, height):
+    def mean_era5(turbines):
+        with da.config.set(**{"array.slicing.split_large_chunks": False}):
+            wind_speed_at_turbines_era5 = calc_wind_speed_at_turbines(
+                wind_velocity_era5, turbines, height=height
+            )
+        return wind_speed_at_turbines_era5.mean(dim="time")
+
+    logging.info("Compute mean ERA5...")
+
+    wind_speed_at_turbines_era5_mean = xr.map_blocks(
+        lambda turbines: mean_era5(turbines).compute(),
+        turbines,
+        template=mean_era5(turbines),
+    )
+
+    with ProgressBar():
+        wind_speed_at_turbines_era5_mean = wind_speed_at_turbines_era5_mean.compute()
+
+    logging.info("Interpolate GWA at turbines...")
+    wind_speed_at_turbines_gwa = calc_wind_speed_at_turbines_gwa(wind_speed_gwa, turbines)
+
+    return wind_speed_at_turbines_gwa / wind_speed_at_turbines_era5_mean
 
 
 def calc_is_built(turbines, time, include_commission_year=None):
@@ -87,13 +129,13 @@ def calc_is_built(turbines, time, include_commission_year=None):
     p_year = turbines.p_year
 
     if include_commission_year is not None:
-        p_year = turbines.p_year.chunk(CHUNK_SIZE_TURBINES)
-        year = time.dt.year.chunk(CHUNK_SIZE_TIME)
+        p_year = turbines.p_year.chunk({"turbines": CHUNK_SIZE_TURBINES})
+        year = time.dt.year.chunk({"time": CHUNK_SIZE_TIME})
 
         if include_commission_year is True:
-            is_built = (p_year <= year).astype(np.float)
+            is_built = (p_year <= year).astype(float)
         elif include_commission_year is False:
-            is_built = (p_year < time.dt.year).astype(np.float)
+            is_built = (p_year < time.dt.year).astype(float)
         else:
             raise ValueError(
                 f"invalid value for include_commission_year: {include_commission_year}"
@@ -108,7 +150,7 @@ def calc_is_built(turbines, time, include_commission_year=None):
                 and np.all(time.dt.minute == 0)
                 and np.all(time.dt.second == 0)
             ), "yearly aggregation of 'time' passed, but not the first hour of the year"
-            is_built = (p_year < time.dt.year).astype(np.float)
+            is_built = (p_year < time.dt.year).astype(float)
             is_built = is_built.where(p_year != time.dt.year, 0.5)
         else:
             assert not (
@@ -119,14 +161,14 @@ def calc_is_built(turbines, time, include_commission_year=None):
             ), "not yearly parameter 'time' passed, but only first hour of the year"
             # beginning of the year as np.datetime64
             p_year_date = p_year.astype(int).astype(str).astype(np.datetime64)
-            is_leap_year = p_year_date.dt.is_leap_year.astype(np.float)
+            is_leap_year = p_year_date.dt.is_leap_year.astype(float)
 
-            p_year_date = p_year_date.chunk(CHUNK_SIZE_TURBINES)
-            time = time.chunk(CHUNK_SIZE_TIME)
-            is_leap_year.chunk(CHUNK_SIZE_TURBINES)
+            p_year_date = p_year_date.chunk({"turbines": CHUNK_SIZE_TURBINES})
+            time = time.chunk({"time": CHUNK_SIZE_TIME})
+            is_leap_year.chunk({"turbines": CHUNK_SIZE_TURBINES})
 
             # this is where the broadcasting magic takes place
-            nanosecs_of_year = (time - p_year_date).astype(np.float)
+            nanosecs_of_year = (time - p_year_date).astype(float)
 
             proportion_of_year = nanosecs_of_year / (365 + is_leap_year)
             proportion_of_year = proportion_of_year / (24 * 60 * 60 * 1e9)
@@ -163,80 +205,6 @@ def calc_rotor_swept_area(turbines, time):
     rotor_swept_area = rotor_swept_area.sum(dim="turbines") / 4 * np.pi
 
     return rotor_swept_area
-
-
-def calc_power_in_wind(wind_speed, turbines, average_wind=False):
-    """Calculates yearly aggregated time series for power in wind captured by operating turbines.
-    This means 16/27 of this value is the Betz' limit for the expected production.
-
-    Missing values in t_rd and t_hh are scaled. Missing values in p_year are ignored (as if
-    turbines are not built at all).
-
-    Parameters
-    ----------
-    wind_speed : xr.DataArray
-        as returned by calc_wind_speed_at_turbines()
-    turbines : xr.DataSet
-        see load_turbines()
-    average_wind : bool
-        use mean wind power over the complete time frame
-
-    Returns
-    -------
-    xr.DataArray
-        how much power is contained in wind for all turbines installed in this year per (in GW)
-
-    """
-    # this function is a bit crazy because p_in has different dimensions in every line of code
-    # and average_wind changes the behavior in surprising ways.
-
-    if average_wind:
-        years_int = np.unique(wind_speed.time.dt.year)
-        assert (
-            years_int.ptp() == len(years_int) - 1
-        ), f"years missing, this is not supported, years: {years_int}"
-
-        time_yearly = (
-            wind_speed.time.sortby("time")
-            .resample(time="1A", label="left", loffset="1D")
-            .first()
-            .time
-        )
-
-        is_built = calc_is_built(turbines, time_yearly.time)
-
-        # TODO this may create a "mean empty slice" warning, because some turbine locations have no
-        # wind speed... Not sure how to deal with that.
-        p_in = (wind_speed ** 3).mean(dim="time")
-    else:
-        is_built = calc_is_built(turbines, wind_speed.time)
-
-        p_in = wind_speed ** 3  # here p_in has dims=('turbines', 'time')
-
-    p_in = p_in * turbines.t_rd ** 2 * (np.pi / 4)
-
-    logging.info("Converting is_built to float...")
-    logging.info("Applying is_built...")
-    p_in = p_in * is_built
-    logging.info("Applying is_built done!")
-
-    p_in = p_in.sum(dim="turbines")
-
-    p_in_monthly = None
-
-    if not average_wind:
-        p_in_monthly = (
-            p_in.sortby("time").resample(time="1M", label="left", loffset="1D").mean(dim="time")
-        )
-        # TODO code duplication with below :(
-        p_in_monthly = 0.5 * AIR_DENSITY_RHO * p_in_monthly * 1e-9  # in GW
-
-        p_in = p_in.sortby("time").resample(time="1A", label="left", loffset="1D").mean(dim="time")
-
-    p_in = 0.5 * AIR_DENSITY_RHO * p_in * 1e-9  # in GW
-
-    logging.info("Returning lazy object...")
-    return p_in, p_in_monthly
 
 
 def calc_bounding_box_usa(turbines, extension=1.0):
@@ -328,49 +296,15 @@ def calc_wind_speed_distribution(turbines, wind_speed, bins=100, chunk_size=800)
     return wind_speed_distribution
 
 
-def fit_efficiency_model(
-    p_in, p_out, p_in_density, efficiency, use_monthly_dummies=False, use_time=False
-):
-    # local import to suppress warning in unit tests, see:
-    # https://github.com/statsmodels/statsmodels/issues/7139
-    from statsmodels.api import OLS
-    from statsmodels.tools.tools import add_constant
+def power_input(wind_speed, rotor_swept_area):
+    """Returns power input in W."""
+    return 0.5 * AIR_DENSITY_RHO * wind_speed**3 * rotor_swept_area
 
-    X = pd.DataFrame(
-        {
-            "p_in_density": p_in_density,
-        }
-    )
 
-    if use_time:
-        # not really time, just a sequentially increasing number
-        X["time"] = range(len(X))
-
-    if use_monthly_dummies:
-        # we add a constant below, so we have to drop one month
-        X = X.join(pd.get_dummies(p_in_density.time.dt.month, drop_first=True))
-
-    # other possible parameters:
-    #  - specific power
-    #  - turbine age
-
-    X = add_constant(X)
-    Y = efficiency.values
-
-    model = OLS(Y, X)
-    fit_result = model.fit()
-
-    efficiency_without_pin = (
-        fit_result.params.const
-        + fit_result.params.p_in_density * p_in_density.mean().values
-        + fit_result.resid
-    )
-
-    if use_time:
-        efficiency_without_pin += fit_result.params.time * X["time"]
-
-    # note: this might be broken if lengths of p_in and p_out do not match up
-    assert len(p_in) == len(efficiency_without_pin), "input lengths do not match"
-    efficiency_without_pin = xr.ones_like(p_in) * efficiency_without_pin
-
-    return fit_result, efficiency_without_pin
+def calc_turbine_age(turbines, time):
+    """Calculate age for each turbine at each time stamp. Returns a xr.DataArray with dimensions
+    'turbines' and 'time' with age in years and 0 before being built.
+    """
+    age = time.dt.year - turbines.p_year
+    age = age.where(age > 0, 0).compute()
+    return age

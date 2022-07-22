@@ -8,25 +8,25 @@ def test_load_turbines():
     turbines = load_data.load_turbines()
     assert np.isnan(turbines.t_cap).sum() == 0
     assert turbines.p_year.min() == 1981
-    assert turbines.p_year.max() == 2019
+    assert turbines.p_year.max() == 2021
 
 
 def test_load_turbines_with_nans():
     turbines_with_nans = load_data.load_turbines(replace_nan_values=False)
-    assert (np.isnan(turbines_with_nans.t_cap)).sum() == 7231
+    assert (np.isnan(turbines_with_nans.t_cap)).sum().load() == 6595
 
 
-def test_load_generated_energy_gwh():
-    generated_energy_gwh = load_data.load_generated_energy_gwh()
+def test_load_p_out_eia():
+    p_out_eia_monthly = load_data.load_p_out_eia_monthly()
 
-    assert generated_energy_gwh.sel(time="2001-01-01") == 389.25
-    assert generated_energy_gwh.sel(time="2013-12-01") == 13967.05881
-    assert len(generated_energy_gwh) == 238
-    assert np.max(generated_energy_gwh) == 29871.72279
+    assert p_out_eia_monthly.sel(time="2001-01-01") == 389.25
+    assert p_out_eia_monthly.sel(time="2013-12-01") == 13967.05881
+    assert len(p_out_eia_monthly) == 255
+    assert np.max(p_out_eia_monthly) == 43230.38297
 
-    assert generated_energy_gwh.dtype == np.float
-    assert isinstance(generated_energy_gwh, xr.DataArray)
-    assert generated_energy_gwh.dims == ("time",)
+    assert p_out_eia_monthly.dtype == np.float64
+    assert isinstance(p_out_eia_monthly, xr.DataArray)
+    assert p_out_eia_monthly.dims == ("time",)
 
 
 def test_load_wind_velocity():

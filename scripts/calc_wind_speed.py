@@ -5,10 +5,7 @@ from src.config import MONTHS
 from src.config import YEARS
 from src.config import REFERENCE_HUB_HEIGHT_M
 from src.util import create_folder
-from src.load_data import (
-    load_turbines,
-    load_generated_energy_gwh,
-)
+from src.load_data import load_turbines
 from src.load_data import load_wind_velocity
 from src.calculations import calc_wind_speed_at_turbines
 
@@ -18,9 +15,6 @@ from src.logging_config import setup_logging
 setup_logging()
 
 turbines = load_turbines()
-generated_energy_gwh = load_generated_energy_gwh()
-
-
 output_folder = create_folder("wind_speed")
 
 

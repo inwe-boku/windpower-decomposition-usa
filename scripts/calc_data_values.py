@@ -1,41 +1,32 @@
 import numpy as np
-import xarray as xr
 
-from src.config import OUTPUT_DIR
-from src.constants import HOURS_PER_YEAR
-from src.constants import KILO_TO_ONE
-from src.util import filter2010
+from src.config import YEARS
 from src.util import write_data_value
 from src.util import nanratio
-from src.util import calc_abs_slope
-from src.load_data import load_generated_energy_gwh
-from src.load_data import load_generated_energy_gwh_yearly
 from src.load_data import load_turbines
-from src.calculations import calc_rotor_swept_area
-from src.calculations import calc_is_built
+from src.logging_config import setup_logging
+
+
+def start_end_years():
+    start_year = list(YEARS)[0]
+    end_year = list(YEARS)[-1]
+
+    write_data_value(
+        "start-year",
+        f"{start_year:.0f}",
+    )
+
+    write_data_value(
+        "end-year",
+        f"{end_year:.0f}",
+    )
 
 
 def calc_correlation_efficiency_vs_input_power_density():
-    rotor_swept_area = xr.load_dataarray(
-        OUTPUT_DIR / "turbine-time-series" / "rotor_swept_area.nc"
-    )
+    from src.loaded_files import d_in
+    from src.loaded_files import efficiency
 
-    p_in = xr.load_dataarray(OUTPUT_DIR / "power_in_wind" / "p_in_monthly.nc")
-    p_in = p_in.sortby("time")
-
-    p_out = load_generated_energy_gwh()
-    p_out = p_out / p_out.time.dt.days_in_month / 24
-    p_out = p_out.sortby("time")
-
-    p_in = filter2010(p_in)
-    p_out = filter2010(p_out)
-    rotor_swept_area = filter2010(rotor_swept_area)
-
-    efficiency = p_out / p_in
-    p_in_density = p_in / rotor_swept_area * 1e9
-
-    correlation = np.corrcoef(p_in_density, efficiency)[0, 1]
-
+    correlation = np.corrcoef(d_in, efficiency)[0, 1]
     write_data_value(
         "correlation-efficiency-vs-input-power-density",
         f"{correlation:.3f}",
@@ -43,59 +34,71 @@ def calc_correlation_efficiency_vs_input_power_density():
 
 
 def number_of_turbines():
-    turbines = load_turbines()
-    (turbines.p_year <= 2010).sum().compute()
+    from src.loaded_files import turbines
+
+    start_year = list(YEARS)[0]
+    end_year = list(YEARS)[-1]
+    num_turbines_start = (turbines.p_year <= start_year).sum()
+    num_turbines_end = (turbines.p_year <= end_year).sum()
+
+    growth_num_turbines_built = num_turbines_end / num_turbines_start * 100
 
     write_data_value(
+        "growth_num_turbines_built",
+        f"{growth_num_turbines_built.values:.0f}",
+    )
+
+    # we cannot use is_built here, because
+    write_data_value(
         "number-of-turbines-start",
-        f"{(turbines.p_year <= 2010).sum().values:,d}",
+        f"{num_turbines_start.values:,d}",
     )
     write_data_value(
         "number-of-turbines-end",
-        f"{(turbines.p_year <= 2019).sum().values:,d}",
+        f"{num_turbines_end.values:,d}",
     )
 
 
-def rotor_swept_area_avg():
-    rotor_swept_area = xr.load_dataarray(
-        OUTPUT_DIR / "turbine-time-series" / "rotor_swept_area_yearly.nc"
+def rotor_swept_area():
+    from src.loaded_files import rotor_swept_area_avg
+
+    growth_rotor_swept_area_avg = rotor_swept_area_avg[-1] / rotor_swept_area_avg[0] * 100
+    write_data_value(
+        "growth_rotor_swept_area_avg",
+        f"{growth_rotor_swept_area_avg.values:.0f}",
     )
 
-    turbines = load_turbines()
-    time = rotor_swept_area.time
-
-    calc_rotor_swept_area(turbines, time)
-    is_built = calc_is_built(turbines, time)
-
-    rotor_swept_area_avg = (
-        calc_rotor_swept_area(turbines, time) / is_built.sum(dim="turbines")
-    ).compute()
-
+    # TODO double check values here, especially if time series are the correct time range!
+    # is the last year really here really the right choice? Or is there an incomplete year at the
+    # end?
     write_data_value(
         "rotor_swept_area_avg-start",
-        f"{int(rotor_swept_area_avg.sel(time='2010').values.round()):,d}",
+        f"{int(rotor_swept_area_avg[0].values.round()):,d}",
     )
     write_data_value(
         "rotor_swept_area_avg-end",
-        f"{int(rotor_swept_area_avg.sel(time='2019').values.round()):,d}",
+        f"{int(rotor_swept_area_avg[-1].values.round()):,d}",
     )
 
 
 def missing_commissioning_year():
-    turbines = load_turbines()
+    from src.loaded_files import turbines
+
+    start_year = list(YEARS)[0]
+    end_year = list(YEARS)[-1]
+
     turbines_with_nans = load_turbines(replace_nan_values="")
     write_data_value(
         "percentage_missing_commissioning_year",
         f"{nanratio(turbines_with_nans.p_year).values * 100:.1f}",
     )
 
-    missing2010 = (
-        np.isnan(turbines_with_nans.p_year).sum() / (turbines_with_nans.p_year <= 2010).sum()
+    missing_start = (
+        np.isnan(turbines_with_nans.p_year).sum() / (turbines_with_nans.p_year <= start_year).sum()
     ).values
-
     write_data_value(
-        "percentage_missing_commissioning_year_2010",
-        f"{missing2010 * 100:.1f}",
+        "percentage_missing_commissioning_year_start",
+        f"{missing_start * 100:.1f}",
     )
 
     write_data_value(
@@ -109,7 +112,9 @@ def missing_commissioning_year():
 
     lifetime = 25
     num_further_old_turbines = (
-        (turbines.sel(turbines=~turbines.is_decomissioned).p_year < (2019 - lifetime)).sum().values
+        (turbines.sel(turbines=~turbines.is_decomissioned).p_year < (end_year - lifetime))
+        .sum()
+        .values
     )
     write_data_value(
         "num_further_old_turbines",
@@ -122,104 +127,133 @@ def missing_commissioning_year():
     )
 
 
-def calculate_slopes():
-    p_in = filter2010(xr.open_dataarray(OUTPUT_DIR / "power_in_wind" / "p_in.nc"))
-    generated_energy_gwh_yearly = filter2010(load_generated_energy_gwh_yearly())
-    rotor_swept_area = filter2010(
-        xr.load_dataarray(OUTPUT_DIR / "turbine-time-series" / "rotor_swept_area_yearly.nc")
-    )
-    is_built_yearly = xr.open_dataarray(OUTPUT_DIR / "turbine-time-series" / "is_built_yearly.nc")
+def input_power_density():
+    from src.loaded_files import d_in
+    from src.loaded_files import d_in_avgwind
+    from src.loaded_files import d_in_avgwind_refheight
 
-    num_turbines_built = filter2010(is_built_yearly.sum(dim="turbines"))
-
-    data = {
-        "outputpowerdensity": (
-            1e9 * generated_energy_gwh_yearly / HOURS_PER_YEAR / rotor_swept_area
-        ),
-        "inputpowerdensity": 1e9 * p_in / rotor_swept_area,
-        "rotor_swept_area_avg": rotor_swept_area / num_turbines_built,
-        "efficiency": 100 * generated_energy_gwh_yearly / p_in / HOURS_PER_YEAR,
-    }
-    # do not forget to filter2010!
-
-    for key, values in data.items():
-        relative_to_2010 = 100 * values / values[0]
-        write_data_value(
-            f"{key}_relative_abs_slope",
-            f"{calc_abs_slope(relative_to_2010):.1f}",
-        )
-
-    outputpowerdensity = data["outputpowerdensity"].values
     write_data_value(
-        "outputpowerdensity-start",
-        f"{outputpowerdensity[0]:.0f}",
+        "d_in_avgwind_start",
+        f"{d_in_avgwind[0].values:.1f}",
     )
     write_data_value(
-        "outputpowerdensity-end",
-        f"{outputpowerdensity[-1]:.0f}",
-    )
-    write_data_value(
-        "outputpowerdensity_abs_slope",
-        f"{calc_abs_slope(outputpowerdensity):.1f}",
+        "d_in_avgwind_end",
+        f"{d_in_avgwind[-1].values:.1f}",
     )
 
-    percentage_poweroutput_per_area = 100 * outputpowerdensity[-1] / outputpowerdensity[0]
+    # effect of hub height change
+    effect_huhheights = d_in_avgwind - d_in_avgwind_refheight
     write_data_value(
-        "percentage_poweroutput_per_area",
-        f"{percentage_poweroutput_per_area:.0f}",
-    )
-    write_data_value(
-        "less_poweroutput_per_area",
-        f"{100 - percentage_poweroutput_per_area:.0f}",
+        "d_in_effect-of-hub-height-change",
+        f"{(effect_huhheights[-1] - effect_huhheights[0]).values:.1f}",
     )
 
-    growth_num_turbines_built = num_turbines_built[-1] / num_turbines_built[0] * 100
+    # change due to new locations
     write_data_value(
-        "growth_num_turbines_built",
-        f"{growth_num_turbines_built.values:.0f}",
+        "d_in_abs-change-new_locations",
+        f"{abs(d_in_avgwind_refheight[-1] - d_in_avgwind_refheight[0]).values:.1f}",
     )
-    rotor_swept_area_avg = data["rotor_swept_area_avg"]
-    growth_rotor_swept_area_avg = rotor_swept_area_avg[-1] / rotor_swept_area_avg[0] * 100
+
+    # annual variations
     write_data_value(
-        "growth_rotor_swept_area_avg",
-        f"{growth_rotor_swept_area_avg.values:.0f}",
+        "d_in_variations_max",
+        f"{(d_in - d_in_avgwind).max().values:.1f}",
     )
-    # TODO double check values here, especially if time series are the correct time range!
+    write_data_value(
+        "d_in_variations_min",
+        f"{(d_in - d_in_avgwind).min().values:.1f}",
+    )
+
+
+def output_power_density():
+    from src.loaded_files import d_out
+    from src.loaded_files import d_out_avgwind
+
+    write_data_value(
+        "d_out_avgwind_start",
+        f"{d_out_avgwind[0].values:.1f}",
+    )
+    write_data_value(
+        "d_out_avgwind_end",
+        f"{d_out_avgwind[-1].values:.1f}",
+    )
+    write_data_value(
+        "d_out_avgwind_max",
+        f"{d_out_avgwind.max().values:.1f}",
+    )
+    write_data_value(
+        "d_out_avgwind_idxmax",
+        f"{d_out_avgwind.idxmax().dt.year.values:.0f}",
+    )
+    write_data_value(
+        "d_out_variations_max",
+        f"{(d_out - d_out_avgwind).max().values:.1f}",
+    )
+    write_data_value(
+        "d_out_variations_min",
+        f"{(d_out - d_out_avgwind).min().values:.1f}",
+    )
+    write_data_value(
+        "d_out_variations_std",
+        f"{(d_out - d_out_avgwind).std().values:.1f}",
+    )
+    # not sure if this is really relevant... should be zero anyway (and it is)
+    write_data_value(
+        "d_out_variations_mean",
+        f"{(d_out - d_out_avgwind).mean().values:.1f}",
+    )
+
+    write_data_value(
+        "d_out_less_percentages_end",
+        f"{(100 * (1 - d_out_avgwind[-1] / d_out_avgwind.max())).values:.1f}",
+    )
+    # TODO check if all values above are used correctly
+
+    # d_out_avgwind_yearly_increase
+    # d_out_avgwind_yearly_decrease
+    # d_out_avgwind_decline_percent
+
+
+def efficiency():
+    from src.loaded_files import efficiency
+    from src.loaded_files import efficiency_avgwind
+
+    write_data_value(
+        "efficiency_start",
+        f"{efficiency.values[0]:.1f}",
+    )
+    write_data_value(
+        "efficiency_end",
+        f"{efficiency.values[-1]:.1f}",
+    )
+    decline_per_year = (efficiency_avgwind[-1] - efficiency_avgwind[0]) / len(efficiency_avgwind)
+    write_data_value(
+        "efficiency_avgwind-decline-per-year",
+        f"{abs(decline_per_year).values:.2f}",
+    )
 
 
 def specific_power():
-    turbines = load_turbines()
-    rotor_swept_area = turbines.t_rd ** 2 / 4 * np.pi
-    specific_power = (
-        (turbines.t_cap * KILO_TO_ONE / rotor_swept_area).groupby(turbines.p_year).mean()
-    )
+    from src.loaded_files import specifc_power_per_year
+
     write_data_value(
         "specific-power-start",
-        f"{specific_power.sel(p_year=2010).values:.0f}",
+        f"{specifc_power_per_year.isel(time=0).values:.0f}",
     )
     write_data_value(
         "specific-power-end",
-        f"{specific_power.sel(p_year=2019).values:.0f}",
+        f"{specifc_power_per_year.isel(time=-1).values:.0f}",
     )
 
 
-def capacity_growth():
-    turbines = load_turbines()
-
-    for year in (2010, 2019):
-        installed_capacity_gw = (
-            turbines.sel(turbines=turbines.p_year <= year).t_cap.sum().values * 1e-6
-        )
-        write_data_value(
-            f"installed_capacity_gw_{year}",
-            f"{installed_capacity_gw:.0f}",
-        )
-
-
 if __name__ == "__main__":
-    calc_correlation_efficiency_vs_input_power_density()
+    setup_logging()
+
     number_of_turbines()
-    calculate_slopes()
+    rotor_swept_area()
+    input_power_density()
+    output_power_density()
+    efficiency()
     specific_power()
-    capacity_growth()
     missing_commissioning_year()
+    calc_correlation_efficiency_vs_input_power_density()

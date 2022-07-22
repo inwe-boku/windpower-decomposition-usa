@@ -4,6 +4,7 @@ import xarray as xr
 from src.logging_config import setup_logging
 from src.config import OUTPUT_DIR
 from src.load_data import load_turbines
+from src.load_data import load_p_in
 
 
 def check_turbines():
@@ -21,14 +22,13 @@ def check_turbines():
 
 
 def check_pin():
-    p_in = xr.open_dataarray(OUTPUT_DIR / "power_in_wind" / "p_in.nc")
-    p_in_avg = xr.open_dataarray(OUTPUT_DIR / "power_in_wind" / "p_in_avg.nc")
-    # p_in_avg80 = xr.open_dataarray(OUTPUT_DIR / "power_in_wind" / "p_in_avg80.nc")
+    p_in = load_p_in()
+    p_in_avgwind = load_p_in(avgwind=True)
 
     # TODO add test for p_in_avg80
 
     # TODO not sure what is a good threshold here
-    assert np.abs((p_in - p_in_avg).mean()) < 0.5
+    assert np.abs((p_in - p_in_avgwind).mean()) < 0.5
 
 
 def check_is_built():
@@ -38,7 +38,7 @@ def check_is_built():
     assert np.all(0 <= is_built)
     assert np.all(is_built <= 1)
 
-    is_built_diff = is_built.astype(np.float).diff(dim="time")
+    is_built_diff = is_built.astype(float).diff(dim="time")
 
     # this should be less than a 1/24/60, but simulation data contains only one time stamp every
     # 28-31 days, so we are not that strict here...
@@ -57,14 +57,14 @@ def check_rotor_swept_area():
     is_built = xr.open_dataarray(OUTPUT_DIR / "turbine-time-series" / "is_built.nc")
     num_turbines = is_built.sum(dim="turbines")
 
-    rotor_swept_area = xr.load_dataarray(
+    rotor_swept_area = xr.open_dataarray(
         OUTPUT_DIR / "turbine-time-series" / "rotor_swept_area.nc"
     )
     min_rotor_diameter = 10
     max_rotor_diameter = 180
     avg_rotor_swept_area = rotor_swept_area / num_turbines
-    assert np.all(min_rotor_diameter ** 2 / 4 * np.pi < avg_rotor_swept_area) & np.all(
-        avg_rotor_swept_area < max_rotor_diameter ** 2 / 4 * np.pi
+    assert np.all(min_rotor_diameter**2 / 4 * np.pi < avg_rotor_swept_area) & np.all(
+        avg_rotor_swept_area < max_rotor_diameter**2 / 4 * np.pi
     ), "implausible average rotor diameter"
 
 

@@ -14,7 +14,7 @@ def log_exception(type_, value, traceback):
     )
 
 
-def setup_logging(fname=LOG_FILE):
+def setup_logging(fname=LOG_FILE, is_script=True):
     global setup_done
     if setup_done:
         raise RuntimeError("Called setup_logging() twice, don't do this!")
@@ -64,4 +64,5 @@ def setup_logging(fname=LOG_FILE):
 
     logging.config.dictConfig(logging_config)
 
-    logging.info("Starting %s....", sys.argv[0])
+    if is_script:
+        logging.info("Starting %s....", sys.argv[0])

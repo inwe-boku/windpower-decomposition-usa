@@ -80,7 +80,7 @@ def mean_per_bin(d, by, aggreagation="mean"):
 
 
 def replace_nans_binmean(d, by, aggreagation="mean"):
-    """"Replace each NaN value in `d` by the mean in each bin when grouping by `by`."""
+    """Replace each NaN value in `d` by the mean in each bin when grouping by `by`."""
     return d.where(~np.isnan(d), mean_per_bin(d, by, aggreagation=aggreagation))
 
 
@@ -115,8 +115,8 @@ def create_folder(path, prefix=INTERIM_DIR):
     return path
 
 
-def filter2010(data):
-    return data.sel(time=data.time.dt.year >= 2010)
+def filter_year(data, year):
+    return data.sel(time=data.time.dt.year >= year)
 
 
 def write_data_value(name, value):
@@ -126,4 +126,5 @@ def write_data_value(name, value):
 
 def calc_abs_slope(data):
     """Slope of input data, i.e. change per time step using regression line."""
+    # XXX this function might be obsolete
     return np.abs(np.polyfit(range(len(data)), data, deg=1)[0])
