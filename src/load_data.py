@@ -12,63 +12,14 @@ from src.config import INPUT_DIR
 from src.config import INTERIM_DIR
 from src.config import OUTPUT_DIR
 from src.config import MAX_WIND_SPEED
-from src.config import OFFSHORE_TURBINES
 from src.config import SPECIFIC_POWER_RANGE
 from src.config import RESOLUTION_POWER_CURVE_MODEL
 from src.config import LOSS_CORRECTION_FACTOR
 from src.constants import HOURS_PER_YEAR
-from src.preprocess import estimate_missing
 from src.calculations import calc_is_built
 
 from src.config import CHUNK_SIZE_TURBINES
 from src.config import CHUNK_SIZE_TIME
-
-
-def _filter_valid_specific_power(turbines):
-    """Some turbines contain an unrealistic low or large specific power. Some of them probably have
-    a wrong capacity, e.g. 2kW instead of 2000kW. But since there are very few such turbines, we
-    simply remove them form the data set.
-
-    This data cleaning step is especially necessary to avoid NaNs when interpolating in power curve
-    model."""
-
-    rotor_swept_area = turbines.t_rd**2 * np.pi / 4
-    specific_power = turbines.t_cap * 1e3 / rotor_swept_area
-
-    idcs_valid_specific_power = (SPECIFIC_POWER_RANGE[0] <= specific_power) & (
-        specific_power <= SPECIFIC_POWER_RANGE[1]
-    ) | np.isnan(specific_power)
-    turbines = turbines.sel(turbines=idcs_valid_specific_power)
-
-    # this value needs to be changed for other versions of the USWTDB, but the value should always
-    # be neglectable small, otherwise we need some kind of correction
-    num_filtered_turbines = (~idcs_valid_specific_power).sum()
-    assert (
-        num_filtered_turbines <= 78
-    ), f"unexpected number of turbines with invalid specific power: {num_filtered_turbines}"
-
-    return turbines
-
-
-def _filter_offshore(turbines):
-    """There are almost no offshore turbines in the USA. According to a talk by Lucy Pao, there are
-    only 7 offshore turbines (with 6MW capacity each) operating at the moment. The USWTDB seems to
-    contain two turbines, which are not covered by the GWA2 (interpolation at the location yields
-    NaN). We simply remove these two turbines. This needs to be changed
-    """
-    # this is just a paranoia check, because trusting on the turbine ids seems to be too dangerous
-    for offshore_turbine in OFFSHORE_TURBINES:
-        for axis in ("xlong", "ylat"):
-            actual = turbines.sel(turbines=offshore_turbine["id"])[axis]
-            assert actual == offshore_turbine[axis], (
-                f"unexpected turbine location of turbine with turbine ID {offshore_turbine['id']}:"
-                f" expected {axis}={offshore_turbine[axis]}, actual {axis}={actual}"
-            )
-
-    turbines = turbines.sel(
-        turbines=~turbines.turbines.isin([ot["id"] for ot in OFFSHORE_TURBINES])
-    )
-    return turbines
 
 
 def load_turbines(decommissioned=True, replace_nan_values="mean"):
@@ -80,7 +31,7 @@ def load_turbines(decommissioned=True, replace_nan_values="mean"):
     Parameters
     ----------
     decommissioned : bool
-        if True merge datasets from official CSV with Excel sheet received via e-mail
+        deprecated, just for backward compatibility
     replace_nan_values : str
         use data imputation to set missing values for turbine diameters and hub heights, set to ""
         to disable
@@ -90,7 +41,26 @@ def load_turbines(decommissioned=True, replace_nan_values="mean"):
     xr.DataSet
 
     """
+    if replace_nan_values == "mean":
+        fname_raw = ""
+    elif not replace_nan_values:
+        fname_raw = "_raw"
+    else:
+        raise NotImplementedError("Other mechanisms of data imputation not implemented")
 
+    turbines = xr.open_dataset(
+        OUTPUT_DIR / "turbines" / f"turbines{fname_raw}.nc",
+        # chunks={"time": CHUNK_SIZE_TIME},
+        autoclose=True,
+    ).load()
+
+    if not decommissioned:
+        raise NotImplementedError("This has been removed from the load function. Filter manually!")
+
+    return turbines
+
+
+def load_turbines_raw():
     def read_turbines_csv(fname):
         df = pd.read_csv(INPUT_DIR / "wind_turbines_usa" / fname, encoding="latin_1")
         df = df.set_index("case_id")
@@ -104,10 +74,17 @@ def load_turbines(decommissioned=True, replace_nan_values="mean"):
     turbines_v301_df = read_turbines_csv("uswtdb_v3_0_1_20200514.csv")
     turbines_v41_df = read_turbines_csv("uswtdb_v4_1_20210721.csv")
     turbines_v50_df = read_turbines_csv("uswtdb_v5_0_20220427.csv")
+    turbines_v51_df = read_turbines_csv("uswtdb_v5_1_20220729.csv")
+
+    turbines_v301_df["uswtdb_version"] = 3.01
+    turbines_v41_df["uswtdb_version"] = 4.1
+    turbines_v50_df["uswtdb_version"] = 5.0
+    turbines_v51_df["uswtdb_version"] = 5.1
 
     # note: conflicts are not checked here
     turbines_df = turbines_v41_df.combine_first(turbines_v301_df)
     turbines_df = turbines_v50_df.combine_first(turbines_df)
+    turbines_df = turbines_v51_df.combine_first(turbines_df)
 
     turbines = xr.Dataset.from_dataframe(turbines_df)
 
@@ -118,9 +95,12 @@ def load_turbines(decommissioned=True, replace_nan_values="mean"):
     ), f"unexpected total capacity filtered: {neglected_capacity_kw}"
     turbines = turbines.sel(turbines=turbines.xlong < 0)
 
+    # the CSV files do have decommissioned turbines nor a column indicating decommissioning
+    assert "decommiss" not in turbines.variables
+    assert "d_year" not in turbines.variables
     turbines["is_decomissioned"] = xr.zeros_like(turbines.p_year, dtype=bool)
 
-    if decommissioned:
+    def read_decommissioned():
         turbines_decomissioned = pd.read_excel(
             INPUT_DIR / "wind_turbines_usa" / "uswtdb_decom_clean_091521.xlsx",
             engine="openpyxl",
@@ -128,23 +108,20 @@ def load_turbines(decommissioned=True, replace_nan_values="mean"):
         turbines_decomissioned = xr.Dataset(turbines_decomissioned).rename(dim_0="turbines")
         turbines_decomissioned = turbines_decomissioned.set_index(turbines="case_id")
 
-        # note: conflicts are not checked here
-        turbines = turbines.combine_first(turbines_decomissioned)
+        # all turbines
+        assert np.all(turbines_decomissioned.decommiss == "yes")
+        turbines_decomissioned = turbines_decomissioned.drop_vars("decommiss")
 
-        turbines["is_decomissioned"] = turbines.decommiss == "yes"
-        turbines = turbines.drop_vars("decommiss")
+        turbines_decomissioned["is_decomissioned"] = xr.ones_like(
+            turbines_decomissioned.p_year, dtype=bool
+        )
+        return turbines_decomissioned
 
-    if replace_nan_values:
-        turbines = estimate_missing(turbines, method=replace_nan_values)
+    # note: conflicts are not checked here
+    turbines = turbines.combine_first(read_decommissioned())
 
-    turbines = _filter_valid_specific_power(turbines)
-    turbines = _filter_offshore(turbines)
-
-    # we are only using data until 2021, because 2022 is not yet complete
-    # note that NaNs should not be excluded here!
-    turbines = turbines.sel(turbines=~(turbines.p_year >= YEARS.stop))
-
-    turbines = turbines.chunk({"turbines": CHUNK_SIZE_TURBINES})
+    # TODO not sure why this is necessary, shouldn't this be of type bool already?
+    turbines["is_decomissioned"] = turbines["is_decomissioned"].astype(dtype=bool)
 
     return turbines
 
@@ -416,6 +393,8 @@ def load_power_curve_model():
     AB = AB.drop_vars(("index", "CF"))
     AB["capacity_factor"] = AB.capacity_factor / 100.0
 
+    # note: we don't have a cut-out wind speed here, not sure if this could be relevant
+
     # XXX what about wind speeds above 25? How to deal with min/max values here?
     # XXX what if specific power is too large?
     specific_power = xr.DataArray(
@@ -432,6 +411,13 @@ def load_power_curve_model():
     )
 
     wind_speeds_model = np.exp(AB.A) * specific_power**AB.B
+
+    # append capacity_factor=0% for 0m/s wind speed
+    wind_speeds_model_zero = xr.zeros_like(wind_speeds_model).isel(capacity_factor=[0])
+    wind_speeds_model_zero = wind_speeds_model_zero.assign_coords(capacity_factor=[0.0])
+    wind_speeds_model = xr.concat(
+        (wind_speeds_model_zero, wind_speeds_model), dim="capacity_factor"
+    )
 
     # note: this interp() does not return NaN values, but does constant continuation
     power_curves_list = [

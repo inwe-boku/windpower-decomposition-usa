@@ -76,7 +76,7 @@ def plot_growth_and_specific_power():
     from src.loaded_files import turbines
     from src.loaded_files import is_built
     from src.loaded_files import num_turbines_built
-    from src.loaded_files import specifc_power_per_year
+    from src.loaded_files import specific_power_per_year
     from src.loaded_files import rotor_swept_area_avg
 
     fig, axes = plt.subplots(4, figsize=FIGSIZE, sharex=True)
@@ -100,7 +100,7 @@ def plot_growth_and_specific_power():
     axes[2].set_title("Average rotor swept area")
     axes[2].set_ylabel("m²")
 
-    specifc_power_per_year.plot.line(color="k", ax=axes[3])
+    specific_power_per_year.plot.line(color="k", ax=axes[3])
     axes[3].set_title("Average specific power (W/m²)")
     axes[3].set_ylabel("W/m²")
 
@@ -161,6 +161,12 @@ def plot_timeseries_figure(figure_params, ax=None, fig=None):
     ax.grid()
 
     return fig, ax
+
+
+def _rotate_labels(ax, rotation):
+    for label in ax.get_xmajorticklabels():
+        label.set_rotation(rotation)
+        label.set_horizontalalignment("center")
 
 
 def plot_waterfall(
@@ -254,6 +260,8 @@ def plot_waterfall(
 
     plt.xticks(indices + 0.5 * (len(datasets) - 1) * width, x)
 
+    _rotate_labels(ax, rotation=90)
+
     # grid needs to be sent to background explicitly... (see also zorder above)
     ax.grid(zorder=0)
 
@@ -277,9 +285,7 @@ def plot_effect_trends_power(name, datasets, baseline, labels, colors, ax=None, 
         dataset_relative.plot.line("-", label=label, color=color, zorder=25)
         previous = dataset
 
-    for label in ax.get_xmajorticklabels():
-        label.set_rotation(0)
-        label.set_horizontalalignment("center")
+    _rotate_labels(ax, rotation=0)
 
     ax.axhline(0, color="k", linewidth=1, zorder=5)
 
@@ -292,8 +298,9 @@ def plot_effect_trends_power(name, datasets, baseline, labels, colors, ax=None, 
     return fig, ax
 
 
-def plot_irena_capacity_validation(turbines, turbines_with_nans):
-    fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
+def plot_irena_capacity_validation(turbines, turbines_with_nans, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=FIGSIZE)
 
     capacity_irena = load_capacity_irena()
     capacity_uswtdb = calc_capacity_per_year(turbines)
@@ -378,8 +385,6 @@ def plot_irena_capacity_validation(turbines, turbines_with_nans):
         f"{float(np.ceil(max_abs_error)):.0f}",
     )
 
-    return fig
-
 
 def plot_missing_uswtdb_data():
     from src.loaded_files import is_built
@@ -415,7 +420,7 @@ def plot_missing_uswtdb_data():
         ax=ax,
     )
 
-    for year in (2001, 2011):
+    for year in (2001, 2008):
         write_data_value(
             f"percent_missing_capacity_per_year{year}",
             f"{percent_missing_cap_per_year.sel(time=str(year)).values[0]:.0f}",

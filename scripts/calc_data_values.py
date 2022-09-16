@@ -1,8 +1,9 @@
 import numpy as np
 
-from src.config import YEARS
 from src.util import write_data_value
 from src.util import nanratio
+from src.config import YEARS
+from src.config import LOSS_CORRECTION_FACTOR
 from src.load_data import load_turbines
 from src.logging_config import setup_logging
 
@@ -234,15 +235,22 @@ def efficiency():
 
 
 def specific_power():
-    from src.loaded_files import specifc_power_per_year
+    from src.loaded_files import specific_power_per_year
 
     write_data_value(
         "specific-power-start",
-        f"{specifc_power_per_year.isel(time=0).values:.0f}",
+        f"{specific_power_per_year.isel(time=0).values:.0f}",
     )
     write_data_value(
         "specific-power-end",
-        f"{specifc_power_per_year.isel(time=-1).values:.0f}",
+        f"{specific_power_per_year.isel(time=-1).values:.0f}",
+    )
+
+
+def loss_correction_factor():
+    write_data_value(
+        "loss_correction_factor",
+        f"{(100 * LOSS_CORRECTION_FACTOR):.1f}",
     )
 
 
@@ -257,3 +265,4 @@ if __name__ == "__main__":
     specific_power()
     missing_commissioning_year()
     calc_correlation_efficiency_vs_input_power_density()
+    loss_correction_factor()

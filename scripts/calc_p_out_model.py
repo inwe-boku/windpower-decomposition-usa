@@ -8,6 +8,12 @@ from src.wind_power import calc_p_out
 from src.wind_power import calc_power
 from src.logging_config import setup_logging
 
+import dask
+
+# Workaround for xarray#6816: Parallel execution causes often an InvalidIndexError
+# https://github.com/pydata/xarray/issues/6816#issuecomment-1243864752
+dask.config.set(scheduler="single-threaded")
+
 
 def main():
     logging.info("Load input values...")
@@ -24,9 +30,14 @@ def main():
 
     calc_power(name="p_out_model", compute_func=compute_func)
 
-    from src.loaded_files import specific_power
+    # from src.loaded_files import specific_power
 
-    for sp in (200, 250, 300, 400, float(specific_power.mean().compute())):
+    for sp in (
+        200,
+        250,
+        300,
+        400,
+    ):  # float(specific_power.mean().compute())):
 
         def compute_func_refspecpower(wind_speed, turbines):
             p_out = calc_p_out(

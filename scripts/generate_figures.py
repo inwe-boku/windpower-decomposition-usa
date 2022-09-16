@@ -78,11 +78,11 @@ def savefig_decomposition_powerdensity():
     from src.figure_params import d_in_figure_param
 
     params = (
-        ("p_in", load_p_in, d_in_figure_param),
-        ("p_out", load_p_out_model, d_out_figure_param),
+        ("p_in", "Input power", load_p_in, d_in_figure_param),
+        ("p_out", "Output power", load_p_out_model, d_out_figure_param),
     )
 
-    for name, load_func, density_figure_param in params:
+    for name, long_name, load_func, density_figure_param in params:
         power = load_func()
         power_avgwind = load_func(avgwind=True)
         power_avgwind_refheight = load_func(avgwind=True, refheight=True)
@@ -93,19 +93,19 @@ def savefig_decomposition_powerdensity():
             (
                 1e9 * power_avgwind_refheight / rotor_swept_area,
                 "Wind power change due to new locations",
-                f"{name} density at reference height, wind averaged",
+                f"{long_name} density at reference height, wind averaged",
                 ":",
             ),
             (
                 1e9 * power_avgwind / rotor_swept_area,
                 "Effect of hub height change",
-                f"{name} density, wind averaged",
+                f"{long_name} density, wind averaged",
                 "--",
             ),
             (
                 1e9 * power / rotor_swept_area,
                 "Annual variations",
-                f"{name} density",
+                f"{long_name} density",
                 "-",
             ),
         )
@@ -123,7 +123,7 @@ def savefig_decomposition_powerdensity():
                 linestyles=linestyles,
             )
             plt.axhline(baseline, color="k", linewidth=1)
-            plt.ylabel(f"{name} density (W/m²)")
+            plt.ylabel(f"{long_name} density (W/m²)")
 
             total_str = "_total" if total else ""
             savefig(FIGURES_DIR / f"decomposition_{name}-waterfall{total_str}.pdf")
@@ -234,7 +234,8 @@ def save_efficiency_ge1577_example():
 
 def save_figures():
     save_timeseries()
-    save_efficiency_ge1577_example()
+    # TODO selected turbine not available in latest USTWDB anylonger
+    # save_efficiency_ge1577_example()
     save_growth_of_wind_power()
     savefig_decomposition_powerdensity()
     savefig_irena_capacity_validation()

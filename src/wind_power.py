@@ -56,7 +56,17 @@ def calc_p_out(turbines, power_curves, wind_speeds, bias_correction_100m, specif
             # by changing specific power to something constant, we change the capacity and keep the
             # turbines rotor swept area as it is to match up with total rotor swept area used for
             # P_out / A
-            capacity = specific_power * rotor_swept_area.sel(turbines=wind_speeds.turbines)
+            try:
+                capacity = specific_power * rotor_swept_area.sel(turbines=wind_speeds.turbines)
+            except Exception as e:
+                logging.info(
+                    f"Number unique items: {len(np.unique(wind_speeds.turbines.values))},"
+                    f"total items: {len(wind_speeds.turbines.values)}"
+                )
+                logging.info(
+                    "Exception occurred, turbine chunk: " f"{list(wind_speeds.turbines.values)}"
+                )
+                raise e
 
         bias_correction_100m_chunk = bias_correction_100m.sel(turbines=wind_speeds.turbines)
 

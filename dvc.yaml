@@ -41,11 +41,19 @@ stages:
 
   ### Computations ###
 
+  preprocess_turbines:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/preprocess_turbines.py
+    deps:
+    - data/input/wind_turbines_usa
+    - src
+    - scripts
+    outs:
+    - data/output/turbines
   calc_turbine_time_series:
     cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
     deps:
-    - data/input/wind_turbines_usa
     - data/input/p_out_eia
+    - data/output/turbines
     - src
     - scripts
     outs:
@@ -55,8 +63,8 @@ stages:
     deps:
     - src
     - scripts
-    - data/input/wind_turbines_usa
     - data/input/wind_velocity_usa_era5
+    - data/output/turbines
     outs:
     - data/interim/wind_speed
   calc_p_in:
@@ -64,7 +72,7 @@ stages:
     deps:
     - data/output/turbine-time-series
     - data/input/p_out_eia
-    - data/input/wind_turbines_usa
+    - data/output/turbines
     - data/interim/wind_speed
     - src
     - scripts
@@ -83,7 +91,7 @@ stages:
     deps:
     - src
     - scripts
-    - data/input/wind_turbines_usa
+    - data/output/turbines
     - data/interim/wind_speed
     - data/interim/wind_speed_gwa
     outs:
@@ -93,7 +101,7 @@ stages:
     deps:
     - src
     - scripts
-    - data/input/wind_turbines_usa
+    - data/output/turbines
     - data/output/bias_correction
     - data/interim/wind_speed
     outs:
@@ -101,7 +109,7 @@ stages:
   calc_wind_speed_distribution:
     cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed_distribution.py
     deps:
-    - data/input/wind_turbines_usa
+    - data/output/turbines
     - data/interim/wind_speed
     - src
     - scripts
@@ -159,19 +167,34 @@ stages:
 
   ### Simulation dataset ###
 
+  create_simulation_turbines:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/create_simulation_turbines.py
+    deps:
+    - src
+    - scripts
+    outs:
+    - data-simulation/input/wind_turbines_usa
+  preprocess_turbines_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/preprocess_turbines.py
+    deps:
+    - data-simulation/input/wind_turbines_usa
+    - src
+    - scripts
+    outs:
+    - data-simulation/output/turbines
   create_simulation_data:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/create_simulation_data.py
     deps:
     - src
     - scripts
+    - data-simulation/output/turbines
     outs:
     - data-simulation/input/p_out_eia
-    - data-simulation/input/wind_turbines_usa
     - data-simulation/input/wind_velocity_usa_era5
   calc_turbine_time_series_simulation:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
     deps:
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/input/p_out_eia
     outs:
     - data-simulation/output/turbine-time-series
@@ -179,7 +202,7 @@ stages:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed.py
     deps:
     - data-simulation/input/p_out_eia
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/input/wind_velocity_usa_era5
     - src
     - scripts
@@ -190,7 +213,7 @@ stages:
     deps:
     - data-simulation/output/turbine-time-series
     - data-simulation/input/p_out_eia
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/interim/wind_speed
     - src
     outs:
@@ -208,7 +231,7 @@ stages:
     deps:
     - src
     - scripts
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/interim/wind_speed
     - data-simulation/interim/wind_speed_gwa
     outs:
@@ -218,7 +241,7 @@ stages:
     deps:
     - src
     - scripts
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     #- data-simulation/output/bias_correction TODO
     - data-simulation/interim/wind_speed
     outs:
@@ -226,6 +249,7 @@ stages:
   calc_wind_speed_distribution_simulation:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed_distribution.py
     deps:
+    - data-simulation/output/turbines
     - data-simulation/input/wind_turbines_usa
     - data-simulation/interim/wind_speed
     - src
@@ -236,7 +260,7 @@ stages:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/run_checks.py
     deps:
     - data-simulation/input/p_out_eia
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/interim/wind_speed
     - data-simulation/output/p_in
     - data-simulation/output/turbine-time-series
@@ -248,7 +272,7 @@ stages:
   figures_simulation:
     cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/generate_figures.py
     deps:
-    - data-simulation/input/wind_turbines_usa
+    - data-simulation/output/turbines
     - data-simulation/input/p_out_eia
     - data-simulation/output/p_in
     - data-simulation/output/turbine-time-series

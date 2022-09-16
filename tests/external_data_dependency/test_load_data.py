@@ -13,7 +13,7 @@ def test_load_turbines():
 
 def test_load_turbines_with_nans():
     turbines_with_nans = load_data.load_turbines(replace_nan_values=False)
-    assert (np.isnan(turbines_with_nans.t_cap)).sum().load() == 6595
+    assert (np.isnan(turbines_with_nans.t_cap)).sum().load() == 6778
 
 
 def test_load_p_out_eia():

@@ -62,7 +62,7 @@ efficiency_avgwind = 100 * p_out_model_avgwind / p_in_avgwind
 
 # in W/m2
 specific_power = 1e3 * turbines.t_cap / (turbines.t_rd**2 * np.pi / 4)
-specifc_power_per_year = (specific_power * is_built).sum(dim="turbines") / num_turbines_built
+specific_power_per_year = (specific_power * is_built).sum(dim="turbines") / num_turbines_built
 
 total_capacity_kw = (is_built * turbines.t_cap).sum(dim="turbines")
 capacity_factors_model = 100 * 1e6 * p_out_model / total_capacity_kw

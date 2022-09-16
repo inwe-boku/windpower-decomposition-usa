@@ -20,16 +20,8 @@ RESOLUTION_POWER_CURVE_MODEL = {
 # turbines with outside of this range are discarded as unrealistic
 SPECIFIC_POWER_RANGE = 100, 1000
 
-# this corrects for downtime, curtailing and wakes
-# TODO this is actually 0.83079, use the following code to calculate:
-# np.linalg.lstsq(
-#     (p_out_model / LOSS_CORRECTION_FACTOR)
-#     .isel(time=p_out_model.time.dt.year >= 2011)
-#     .values[:, np.newaxis],
-#     load_p_out_eia().isel(time=p_out_model.time.dt.year >= 2011),
-#     rcond=None,
-# )
-LOSS_CORRECTION_FACTOR = 0.83
+# this corrects for downtime, curtailing and wakes, see notebook: estimate_loss_corretion_factor
+LOSS_CORRECTION_FACTOR = 0.8890028225626951
 
 # From Staffel and Green 2014: https://doi.org/10.1016/j.renene.2013.10.041
 AGEING_PER_YEAR = 1.6e-2  # 16 percent per decade, 1.6% annually
@@ -74,7 +66,7 @@ OFFSHORE_TURBINES = [
     },
     {
         "id": 3105267,
-        "xlong": -75.491641,
+        "xlong": -75.491638,
         "ylat": 36.896313,
     },
 ]
