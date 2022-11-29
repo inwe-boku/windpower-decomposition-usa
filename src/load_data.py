@@ -376,7 +376,10 @@ def load_wind_speed_gwa(height):
     return wind_speed_gwa
 
 
-def load_power_curve_model():
+def load_power_curve_model(
+    resolution_specific_power=RESOLUTION_POWER_CURVE_MODEL["specific_power"],
+    resolution_wind_speeds=RESOLUTION_POWER_CURVE_MODEL["wind_speeds"],
+):
     """Implements the Power curve model by Ryberg et al.
     See Appendix A in DOI: 10.1016/j.energy.2019.06.052
 
@@ -385,9 +388,7 @@ def load_power_curve_model():
 
     """
     # TODO we could add a cut-off wind speed, but probably this won't make a difference
-    AB = pd.read_csv(
-        INPUT_DIR / "power_curve_modell" / "table_a_b_constants.csv", delimiter=r"\s+"
-    )
+    AB = pd.read_csv(INPUT_DIR / "power_curve_model" / "table_a_b_constants.csv", delimiter=r"\s+")
     AB = AB.to_xarray().rename_dims(index="capacity_factor")
     AB = AB.assign_coords(capacity_factor=AB.CF)
     AB = AB.drop_vars(("index", "CF"))
@@ -401,19 +402,22 @@ def load_power_curve_model():
         np.linspace(
             SPECIFIC_POWER_RANGE[0],
             SPECIFIC_POWER_RANGE[1],
-            num=RESOLUTION_POWER_CURVE_MODEL["specific_power"],
+            num=resolution_specific_power,
         ),
         dims="specific_power",
     )
     wind_speeds_grid = xr.DataArray(
-        np.linspace(0, MAX_WIND_SPEED, num=RESOLUTION_POWER_CURVE_MODEL["wind_speeds"]),
+        np.linspace(0, MAX_WIND_SPEED, num=resolution_wind_speeds),
         dims="wind_speeds",
     )
 
     wind_speeds_model = np.exp(AB.A) * specific_power**AB.B
 
-    # append capacity_factor=0% for 0m/s wind speed
-    wind_speeds_model_zero = xr.zeros_like(wind_speeds_model).isel(capacity_factor=[0])
+    # Append capacity_factor=0% for 0m/s wind speed:
+    # The Ryberg model gives us a data point for CF=%1, which is considered as cut-in wind speed,
+    # i.e. for all wind speeds v < v0 with p(v0) = 1%, we set p(v) = 0%. A linear interpolation
+    # causes troubles because the C_p(v) curve would be above 1. for some v < v0 otherwise.
+    wind_speeds_model_zero = wind_speeds_model.isel(capacity_factor=[0])
     wind_speeds_model_zero = wind_speeds_model_zero.assign_coords(capacity_factor=[0.0])
     wind_speeds_model = xr.concat(
         (wind_speeds_model_zero, wind_speeds_model), dim="capacity_factor"

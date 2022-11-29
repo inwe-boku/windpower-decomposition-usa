@@ -146,8 +146,8 @@ def create_biascorrection():
         )
 
 
-def create_power_curve_modell():
-    fname = create_folder("power_curve_modell", prefix=INPUT_DIR) / "table_a_b_constants.csv"
+def create_power_curve_model():
+    fname = create_folder("power_curve_model", prefix=INPUT_DIR) / "table_a_b_constants.csv"
 
     # this creates a linear power curve from 0m/s to 25m/s for all specific powers
     capacity_factors = np.arange(1, 101, dtype=float)  # in percent
@@ -173,4 +173,4 @@ if __name__ == "__main__":
     create_wind_velocity()
     create_irena_capcity_db()
     create_biascorrection()
-    create_power_curve_modell()
+    create_power_curve_model()

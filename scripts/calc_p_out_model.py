@@ -8,12 +8,6 @@ from src.wind_power import calc_p_out
 from src.wind_power import calc_power
 from src.logging_config import setup_logging
 
-import dask
-
-# Workaround for xarray#6816: Parallel execution causes often an InvalidIndexError
-# https://github.com/pydata/xarray/issues/6816#issuecomment-1243864752
-dask.config.set(scheduler="single-threaded")
-
 
 def main():
     logging.info("Load input values...")

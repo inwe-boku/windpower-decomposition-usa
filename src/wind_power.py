@@ -43,41 +43,25 @@ def calc_p_out(turbines, power_curves, wind_speeds, bias_correction_100m, specif
     def resample_annually(data):
         return data.sortby("time").resample(time="1A", label="left", loffset="1D").mean(dim="time")
 
-    def worker(wind_speeds):
-        # print(wind_speeds.time.isel(time=0).values)
-
+    def worker(wind_speeds, turbines, specific_power, rotor_swept_area, bias_correction_100m):
         if isinstance(specific_power, xr.DataArray):
-            specific_power_chunk = specific_power.sel(turbines=wind_speeds.turbines)
-            turbines_chunk = turbines.sel(turbines=wind_speeds.turbines)
-            capacity = turbines_chunk.t_cap * 1e3
+            capacity = turbines.t_cap * 1e3
         else:
-            # assume int or float
-            specific_power_chunk = specific_power
+            # assume specific_power is int or float
+
             # by changing specific power to something constant, we change the capacity and keep the
             # turbines rotor swept area as it is to match up with total rotor swept area used for
             # P_out / A
-            try:
-                capacity = specific_power * rotor_swept_area.sel(turbines=wind_speeds.turbines)
-            except Exception as e:
-                logging.info(
-                    f"Number unique items: {len(np.unique(wind_speeds.turbines.values))},"
-                    f"total items: {len(wind_speeds.turbines.values)}"
-                )
-                logging.info(
-                    "Exception occurred, turbine chunk: " f"{list(wind_speeds.turbines.values)}"
-                )
-                raise e
-
-        bias_correction_100m_chunk = bias_correction_100m.sel(turbines=wind_speeds.turbines)
+            capacity = specific_power * rotor_swept_area
 
         capacity_factors = power_curves.interp(
-            specific_power=specific_power_chunk,
-            wind_speeds=wind_speeds * bias_correction_100m_chunk,
+            specific_power=specific_power,
+            wind_speeds=wind_speeds * bias_correction_100m,
             method="linear",
             kwargs={"bounds_error": True},
         )
 
-        # is_built = calc_is_built(turbines_chunk, wind_speeds.time, include_commission_year=None)
+        # is_built = calc_is_built(turbines), wind_speeds.time, include_commission_year=None)
 
         # power output for dims: time, turbines
         p_out = capacity_factors * capacity  # * is_built
@@ -97,12 +81,13 @@ def calc_p_out(turbines, power_curves, wind_speeds, bias_correction_100m, specif
     logging.info("Start computation...")
 
     p_out = xr.map_blocks(
-        lambda wind_speeds: worker(wind_speeds).compute().chunk({"time": None}),
+        lambda *args: worker(*args).compute(),
         wind_speeds,
+        (turbines, specific_power, rotor_swept_area, bias_correction_100m),
         template=template,
     )
 
-    # TODO this is in W, should be in GW!
+    # TODO this is in W, should be in GW! (conversion to GW in load_p_out_model())
     return p_out
 
 

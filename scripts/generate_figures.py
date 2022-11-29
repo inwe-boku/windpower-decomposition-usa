@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 
 from src.config import FIGURES_DIR
 from src.config import YEARS
+from src.config import OUTPUT_DIR
 from src.visualize import savefig
 from src.visualize import plot_growth_of_wind_power
 from src.visualize import plot_timeseries_figure
@@ -19,7 +20,10 @@ from src.visualize import plot_irena_poweroutput_validation
 from src.visualize import plot_efficiency_ge1577_example
 from src.visualize import plot_efficiency_ge1577_example_zoom
 from src.visualize import plot_growth_and_specific_power
+from src.visualize import plot_example_turbine_characteristics
+from src.visualize import load_wind_speed_at_locations
 from src.visualize import TURBINE_COLORS
+from src.load_data import load_power_curve_model
 from src.load_data import power_curve_ge15_77
 from src.load_data import load_wind_speed
 from src.load_data import load_turbines
@@ -195,7 +199,6 @@ def save_efficiency_ge1577_example():
         # unknown:
         3026509,
         3028224,
-        3029444,
     ]
     wind_speed = load_wind_speed(YEARS, None).sel(turbines=turbine_idcs).load()
 
@@ -232,10 +235,48 @@ def save_efficiency_ge1577_example():
     savefig(FIGURES_DIR / "efficiency_ge1577_example_zoom.pdf")
 
 
+def savefig_example_turbine_characteristics():
+    from src.loaded_files import turbines
+
+    power_curve_model = load_power_curve_model(
+        resolution_specific_power=5000, resolution_wind_speeds=5000
+    )
+    bias_correction_height = 100
+    bias_correction_factors = xr.open_dataarray(
+        OUTPUT_DIR
+        / "bias_correction"
+        / f"bias_correction_factors_gwa2_{bias_correction_height}m.nc"
+    )
+
+    rotor_diameter = 87
+    sample_turbine_names = ["G87-2.0", "GW87"]
+    turbine_longname_mapping = {
+        "G87-2.0": "Gamesa 87/2000",
+        "GW87": "Goldwind GW87/1500",
+    }
+
+    logging.info("Loading wind speeds to RAM...")
+
+    wind_speed = load_wind_speed_at_locations(
+        sample_turbine_names, bias_correction_factors, turbines
+    )
+
+    plot_example_turbine_characteristics(
+        turbines,
+        wind_speed,
+        power_curve_model,
+        sample_turbine_names,
+        rotor_diameter,
+        bias_correction_factors,
+        turbine_longname_mapping=turbine_longname_mapping,
+    )
+
+    savefig(FIGURES_DIR / "example_turbine_characteristics.pdf")
+
+
 def save_figures():
     save_timeseries()
-    # TODO selected turbine not available in latest USTWDB anylonger
-    # save_efficiency_ge1577_example()
+    save_efficiency_ge1577_example()
     save_growth_of_wind_power()
     savefig_decomposition_powerdensity()
     savefig_irena_capacity_validation()
@@ -243,6 +284,7 @@ def save_figures():
     savefig_scatter_efficiency_input_power_density()
     savefig_irena_poweroutput_validation()
     savefig_growth_and_specific_power()
+    savefig_example_turbine_characteristics()
 
 
 if __name__ == "__main__":

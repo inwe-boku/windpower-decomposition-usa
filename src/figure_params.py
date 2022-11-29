@@ -48,7 +48,7 @@ efficiency_line_param = LineParam(
 
 d_in_line_param = LineParam(
     data=d_in,
-    label="Input power density $\\frac{P_\\mathrm{out}}{A}$",
+    label="Input power density $\\frac{P_\\mathrm{in}}{A}$",
     color=TURBINE_COLORS[4],
 )
 
@@ -86,28 +86,28 @@ d_out_figure_param = FigureParam(
     ],
 )
 
-# specific_power_avg = 300
-# d_out_refspecpower_figure_param = deepcopy(d_out_figure_param)._replace(name="d_out_refspecpower")
-# d_out_refspecpower_figure_param.lines.extend(
-#    [
-#        LineParam(
-#            data=100 * load_p_out_model(refspecpower=specific_power_avg) / rotor_swept_area,
-#            label="Constant specific power, actual wind conditions",
-#            color="#000000",
-#            linestyle="--",
-#            linewidth=0.7,
-#        ),
-#        LineParam(
-#            data=100
-#            * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
-#            / rotor_swept_area,
-#            label="Constant specific power, long-term average wind conditions",
-#            color="#000000",
-#            linestyle="-",
-#            linewidth=0.7,
-#        ),
-#    ]
-# )
+specific_power_avg = 300
+d_out_refspecpower_figure_param = deepcopy(d_out_figure_param)._replace(name="d_out_refspecpower")
+d_out_refspecpower_figure_param.lines.extend(
+    [
+        LineParam(
+            data=1e9 * load_p_out_model(refspecpower=specific_power_avg) / rotor_swept_area,
+            label="Constant specific power, actual wind conditions",
+            color="#000000",
+            linestyle="--",
+            linewidth=0.7,
+        ),
+        LineParam(
+            data=1e9
+            * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
+            / rotor_swept_area,
+            label="Constant specific power, long-term average wind conditions",
+            color="#000000",
+            linestyle="-",
+            linewidth=0.7,
+        ),
+    ]
+)
 
 efficiency_figure_param = FigureParam(
     name="system_efficiency",
@@ -126,29 +126,29 @@ efficiency_figure_param = FigureParam(
     ],
 )
 
-# efficiency_refspecpower_figure_param = deepcopy(efficiency_figure_param)._replace(
-#    name="efficiency_refspecpower"
-# )
-# efficiency_refspecpower_figure_param.lines.extend(
-#    [
-#        LineParam(
-#            data=100 * load_p_out_model(refspecpower=specific_power_avg) / p_in,
-#            label="Constant specific power, actual wind conditions",
-#            color="#000000",
-#            linestyle="--",
-#            linewidth=0.7,
-#        ),
-#        LineParam(
-#            data=100
-#            * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
-#            / p_in_avgwind,
-#            label="Constant specific power, long-term average wind conditions",
-#            color="#000000",
-#            linestyle="-",
-#            linewidth=0.7,
-#        ),
-#    ]
-# )
+efficiency_refspecpower_figure_param = deepcopy(efficiency_figure_param)._replace(
+    name="efficiency_refspecpower"
+)
+efficiency_refspecpower_figure_param.lines.extend(
+    [
+        LineParam(
+            data=100 * load_p_out_model(refspecpower=specific_power_avg) / p_in,
+            label="Constant specific power, actual wind conditions",
+            color="#000000",
+            linestyle="--",
+            linewidth=0.7,
+        ),
+        LineParam(
+            data=100
+            * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
+            / p_in_avgwind,
+            label="Constant specific power, long-term average wind conditions",
+            color="#000000",
+            linestyle="-",
+            linewidth=0.7,
+        ),
+    ]
+)
 
 
 capacity_factors_param = FigureParam(
@@ -329,8 +329,8 @@ figure_params = [
             d_in_line_param,
         ],
     ),
-    # d_out_refspecpower_figure_param,
-    # efficiency_refspecpower_figure_param,
+    d_out_refspecpower_figure_param,
+    efficiency_refspecpower_figure_param,
     d_in_figure_param,
     d_out_figure_param,
     efficiency_figure_param,

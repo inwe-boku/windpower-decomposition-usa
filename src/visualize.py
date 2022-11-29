@@ -1,6 +1,7 @@
 import warnings
 
 import numpy as np
+import dask as da
 import xarray as xr
 
 import matplotlib.pyplot as plt
@@ -8,10 +9,13 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.lines import Line2D
 
 from src.config import FIGSIZE
+from src.config import YEARS
 from src.constants import HOURS_PER_YEAR
+from src.constants import AIR_DENSITY_RHO
 from src.calculations import calc_capacity_per_year
 from src.calculations import power_input
 from src.load_data import load_turbines
+from src.load_data import load_wind_speed
 from src.load_data import load_p_out_eia
 from src.load_data import load_capacity_irena
 from src.load_data import load_p_in
@@ -683,3 +687,144 @@ def plot_efficiency_ge1577_example_zoom(
     )
 
     return fig
+
+
+def plot_example_turbine_characteristics(
+    turbines,
+    wind_speed,
+    power_curve_model,
+    sample_turbine_names,
+    rotor_diameter,
+    bias_correction_factors,
+    turbine_longname_mapping=None,
+):
+    fig, axes = plt.subplots(nrows=3, figsize=FIGSIZE, sharex="col")
+
+    colors = reversed(TURBINE_COLORS)
+
+    for sample_turbine_name, color in zip(sample_turbine_names, colors):
+        sample_turbine = turbines.sel(turbines=turbines.t_model == sample_turbine_name)
+        assert sample_turbine.sizes["turbines"], f"turbine {sample_turbine_name} not found"
+        assert np.all(sample_turbine.t_rd == rotor_diameter), (
+            f"not all turbines have a {rotor_diameter}m"
+            f"rotor diameter: {sample_turbine_name}: {np.unique(sample_turbine.t_rd)}"
+        )
+
+        capacities = np.unique(sample_turbine.t_cap)
+        assert (
+            len(capacities) == 1
+        ), f"different capacities for turbine model {sample_turbine_name} found: {capacities}"
+        capacity = capacities[0]
+
+        rotor_swept_area = rotor_diameter**2 * np.pi / 4
+        specific_power = capacity * 1e3 / rotor_swept_area
+
+        longname = (
+            turbine_longname_mapping[sample_turbine_name]
+            if turbine_longname_mapping is not None
+            else sample_turbine_name
+        )
+        label = f"{longname}, {capacity * 1e-3}MW capacity"  # , {rotor_diameter}m rotor diameter"
+        power_curve = capacity * power_curve_model.interp(
+            specific_power=specific_power, method="linear"
+        )
+        power_curve.plot(ax=axes[0], color=color, label=label)
+
+        p_in = 0.5 * AIR_DENSITY_RHO * power_curve.wind_speeds**3 * rotor_swept_area
+        (power_curve * 1e3 / p_in).plot(ax=axes[1], color=color, label=label)
+
+        wind_speed_t = wind_speed.sel(turbines=sample_turbine.turbines)
+
+        # plot one line for all locations of a turbine model
+        wind_speed_t.plot.hist(
+            ax=axes[2],
+            histtype="step",
+            density=True,
+            bins=200,
+            color=color,
+            label=f"{sample_turbine.sizes['turbines']} locations",
+        )
+
+        # plot a line for each location, each turbine model in the same color
+        # for idx, w in wind_speed_t.groupby("turbines"):
+        #    w.plot.hist(
+        #        ax=axes[2],
+        #        histtype="step",
+        #        density=True,
+        #        bins=50,
+        #        label=f"{sample_turbine.sizes['turbines']} locations",
+        #        alpha=0.1,
+        #        color=color,
+        #    )
+
+        # plot only one arbitrary location for each turbine model
+        # next(choose_samples(wind_speed_t, num_samples=1, dim="turbines")).plot.hist(
+        #    ax=axes[2],
+        #    histtype="step",
+        #    density=True,
+        #    bins=50,
+        #    label=f"{sample_turbine.sizes['turbines']} locations",
+        # )
+
+    axes[0].set_xlim(0, 17)
+    axes[0].legend()
+    axes[0].set_title("")
+    axes[0].set_ylabel("Power output (KW)")
+    axes[0].set_xlabel("")
+
+    axes[1].legend()
+    axes[1].set_title("")
+    axes[1].axhline(16 / 27, label="Betz' limit", color="k", linestyle=":")
+    axes[1].set_ylabel("Efficiency (%)")
+    axes[1].set_xlabel("")
+
+    axes[2].legend()
+    axes[2].set_title("")
+    axes[2].set_ylabel("Probability density")
+    axes[2].set_xlabel("Wind speed (m/s)")
+
+
+def load_wind_speed_at_locations(sample_turbine_names, bias_correction_factors, turbines):
+    # this takes some while and a couple of GB of RAM
+
+    # this context-manager silences a warning, not entirely sure what's the best option, but
+    # we don't really care
+    with da.config.set(**{"array.slicing.split_large_chunks": True}):
+        wind_speed = load_wind_speed(YEARS, None)
+        wind_speed = wind_speed.sel(turbines=turbines.t_model.isin(sample_turbine_names)).load()
+    return wind_speed * bias_correction_factors
+
+
+def plot_locations(turbines, sample_turbine_names):
+    colors = reversed(TURBINE_COLORS)
+    for sample_turbine_name, marker, color in zip(
+        sample_turbine_names, ["x", "o", "v", "*"], colors
+    ):
+        sample_turbine = turbines.sel(turbines=turbines.t_model == sample_turbine_name)
+        plt.plot(
+            sample_turbine.ylat,
+            sample_turbine.xlong,
+            marker,
+            color=color,
+            label=f"{sample_turbine_name}",
+        )
+
+    plt.legend()
+
+
+def plot_commissioning_years(turbines, sample_turbine_names):
+    plt.hist(
+        [
+            turbines.sel(turbines=turbines.t_model == sample_turbine_name).p_year
+            for sample_turbine_name in sample_turbine_names
+        ],
+        # histtype='step',
+        density=True,
+        bins=25,
+        label=[sample_turbine_name for sample_turbine_name in sample_turbine_names],
+        color=list(reversed(TURBINE_COLORS))[: len(sample_turbine_names)],
+        # alpha=0.3,
+        # ax=ax
+    )
+    plt.xlabel("Commissioning year")
+    plt.legend()
