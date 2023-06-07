@@ -69,4 +69,6 @@ capacity_factors_model = 100 * 1e6 * p_out_model / total_capacity_kw
 capacity_factors_model_avgwind = 100 * 1e6 * p_out_model_avgwind / total_capacity_kw
 capacity_factors_eia = 100 * 1e6 * load_p_out_eia() / total_capacity_kw
 
+avg_hubheights = (turbines.t_hh * is_built).sum(dim="turbines") / num_turbines_built
+
 logging.info("Loading files done!")

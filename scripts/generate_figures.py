@@ -63,6 +63,9 @@ def savefig_growth_and_specific_power():
     plot_growth_and_specific_power()
     savefig(FIGURES_DIR / "growth_and_specific_power.pdf")
 
+    plot_growth_and_specific_power(plot_percentiles=True, plot_number_of_turbines=True)
+    savefig(FIGURES_DIR / "growth_and_specific_power_with_percentiles.pdf")
+
 
 def save_timeseries():
     from src.figure_params import figure_params
@@ -155,6 +158,38 @@ def savefig_decomposition_powerdensity():
             fig=fig,
         )
         savefig(FIGURES_DIR / f"{name}_with_trends.pdf")
+
+
+def savefig_p_out_decomposition_with_p_out():
+    logging.info("Plotting p_out_decomposition_with_p_out...")
+    from src.loaded_files import p_out_model
+    from src.figure_params import p_out_decomposition_figure_param
+    from src.figure_params import FigureParam
+    from src.figure_params import LineParam
+
+    fig, axes = plt.subplots(2, figsize=(12, 12), sharex=True)
+
+    plot_timeseries_figure(p_out_decomposition_figure_param, ax=axes[0], fig=fig)
+
+    p_out_figure_param = FigureParam(
+        name="p_out",
+        unit="%",
+        absolute_plot=False,
+        lines=[
+            LineParam(
+                p_out_model,
+                label="Power output $P_\\mathrm{out}$",
+                color="#1b494d",
+            ),
+        ],
+    )
+
+    plot_timeseries_figure(p_out_figure_param, ax=axes[1], fig=fig)
+    ax = axes[1].twinx()
+    p_out_model.plot(linestyle="-", color="#1b494d", ax=ax)
+    ax.set_ylabel("GW")
+
+    savefig(FIGURES_DIR / "p_out_decomposition_with_p_out.pdf")
 
 
 def savefig_scatter_efficiency_input_power_density():
@@ -278,6 +313,7 @@ def save_figures():
     save_timeseries()
     save_efficiency_ge1577_example()
     save_growth_of_wind_power()
+    savefig_p_out_decomposition_with_p_out()
     savefig_decomposition_powerdensity()
     savefig_irena_capacity_validation()
     savefig_missing_uswtdb_data()

@@ -1,0 +1,5 @@
+outs:
+- md5: c233dafe6e200109d0b2eaf8cca8fb46.dir
+  path: wind_velocity_usa_era5
+  size: 135131365778
+  nfiles: 265

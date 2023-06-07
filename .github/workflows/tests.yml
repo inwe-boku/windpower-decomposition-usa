@@ -1,0 +1,117 @@
+name: Tests
+
+on: push
+
+# Other Github actions to setup conda, not sure which is the best one:
+#    https://github.com/marketplace/actions/setup-miniconda
+#      --> seems to work fine
+#    https://github.com/matthewrmshin/conda-action
+#      --> No success, how to activate env? Has only 2 stars...
+#    https://github.com/marketplace/actions/setup-conda
+#      --> not tested yet
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+
+      - name: Cache conda
+        uses: actions/cache@v1
+        env:
+          # Increase this value to reset cache if env.yml has not changed
+          CACHE_NUMBER: 0
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('env.yml') }}
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.8
+          #mamba-version: "*"
+          #activate-environment: wind_power_decomposition_usa
+          #channels: conda-forge
+          #channel-priority: strict
+          #environment-file: env.yml
+
+          # use Mambaforge to avoid weird conda setup issue:
+          # https://github.com/conda-incubator/setup-miniconda/issues/116#issuecomment-1384648777
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          activate-environment: wind_power_decomposition_usa
+          environment-file: env.yml
+          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+
+      - shell: bash -l {0}
+        run: dvc repro lint
+
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+
+      - name: Cache conda
+        uses: actions/cache@v1
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('etc/example-environment.yml') }}
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.8
+          #mamba-version: "*"
+          #activate-environment: wind_power_decomposition_usa
+          #channels: conda-forge
+          #channel-priority: strict
+          #environment-file: env.yml
+
+          # use Mambaforge to avoid weird conda setup issue:
+          # https://github.com/conda-incubator/setup-miniconda/issues/116#issuecomment-1384648777
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          activate-environment: wind_power_decomposition_usa
+          environment-file: env.yml
+          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+
+      - shell: bash -l {0}
+        run: dvc repro unit_test_nodep
+
+  integrationtests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+
+      - name: Cache conda
+        uses: actions/cache@v1
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('etc/example-environment.yml') }}
+
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.8
+          #mamba-version: "*"
+          #activate-environment: wind_power_decomposition_usa
+          #channels: conda-forge
+          #channel-priority: strict
+          #environment-file: env.yml
+
+          # use Mambaforge to avoid weird conda setup issue:
+          # https://github.com/conda-incubator/setup-miniconda/issues/116#issuecomment-1384648777
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          activate-environment: wind_power_decomposition_usa
+          environment-file: env.yml
+          use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
+
+      - shell: bash -l {0}
+        run: dvc repro checks_simulation

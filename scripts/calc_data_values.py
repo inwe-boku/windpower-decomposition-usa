@@ -142,6 +142,21 @@ def input_power_density():
         f"{d_in_avgwind[-1].values:.1f}",
     )
 
+    d_in_avgwind_increase_until_2008 = (
+        d_in_avgwind.sel(time=slice(None, "2008")).diff(dim="time").mean()
+    )
+    write_data_value(
+        "d_in_avgwind_increase_until_2008",
+        f"{d_in_avgwind_increase_until_2008.values:.1f}",
+    )
+    d_in_avgwind_increase_from_2009 = (
+        d_in_avgwind.sel(time=slice("2009", None)).diff(dim="time").mean()
+    )
+    write_data_value(
+        "d_in_avgwind_increase_from_2009",
+        f"{d_in_avgwind_increase_from_2009.values:.1f}",
+    )
+
     # effect of hub height change
     effect_huhheights = d_in_avgwind - d_in_avgwind_refheight
     write_data_value(

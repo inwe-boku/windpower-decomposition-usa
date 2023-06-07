@@ -1,0 +1,8 @@
+Downloaded on 2020-09-07 and 2022-07-21
+https://www.irena.org/wind
+Manually written values to CSV (no parsing or downloading)
+
+On-Shore wind only. Values are in TWh.
+
+Note: Values in CSV are a combination of values available on 2020-09-07 and 2022-07-21. Two years
+have been added but 2010 is missing now. Also one value has been corrected, maybe a typo before.

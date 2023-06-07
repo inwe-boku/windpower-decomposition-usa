@@ -1,0 +1,453 @@
+schema: '2.0'
+stages:
+  wind_speed:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed.py
+    deps:
+    - path: data/input/wind_velocity_usa_era5
+      md5: c233dafe6e200109d0b2eaf8cca8fb46.dir
+      size: 135131365778
+      nfiles: 265
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/interim/wind_speed
+      md5: 93dbad4ac695b177cf69730ee46cee9e.dir
+      size: 238873562106
+      nfiles: 42
+  calc_turbine_time_series:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
+    deps:
+    - path: data/input/p_out_eia
+      md5: ab96b0ba0d9ef8c2fd4b2e741d06c0f3.dir
+      size: 6079
+      nfiles: 1
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/output/turbine-time-series
+      md5: 1e5fea4df6314979fdb213e561b60c31.dir
+      size: 180358480
+      nfiles: 5
+  download_gwa2:
+    cmd: mkdir data/input/wind_speed_gwa2; cd data/input/wind_speed_gwa2; wget  -O
+      gwa2_250_ws_DEFLATE.tif https://silo1.sciencedata.dk/themes/deic_theme_oc7/apps/files_sharing/public.php\?service\=files\&t\=cf5a3255eb87ca25b79aedd8afcaf570\&path\=%2FGWA2.1\&files\=gwa2_250_ws_DEFLATE.tif\&download\&g\=
+    outs:
+    - path: data/input/wind_speed_gwa2
+      md5: e184dbc3e97e399c121247752ad87d01.dir
+      size: 19065688778
+      nfiles: 1
+  convert_gwa_to_netcdf:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/convert_gwa_to_netcdf.py
+    deps:
+    - path: data/input/wind_speed_gwa2
+      md5: e184dbc3e97e399c121247752ad87d01.dir
+      size: 19065688778
+      nfiles: 1
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/interim/wind_speed_gwa
+      md5: 3ea1d63d2b91a81865ccab8d30313689.dir
+      size: 10559450337
+      nfiles: 3
+  calc_bias_correction_gwa:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_bias_correction_gwa.py
+    deps:
+    - path: data/interim/wind_speed
+      md5: 93dbad4ac695b177cf69730ee46cee9e.dir
+      size: 238873562106
+      nfiles: 42
+    - path: data/interim/wind_speed_gwa
+      md5: 3ea1d63d2b91a81865ccab8d30313689.dir
+      size: 10559450337
+      nfiles: 3
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/output/bias_correction
+      md5: 54713427c56bcac6f47078b25725df6a.dir
+      size: 11697732
+      nfiles: 3
+  create_simulation_data:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/create_simulation_data.py
+    deps:
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: 3ce699cb6b6b5dffe2852f1b9c5f96b0.dir
+      size: 138459
+      nfiles: 25
+    outs:
+    - path: data-simulation/input/p_out_eia
+      md5: f89350c269a9a4542c0b9e60c3905067.dir
+      size: 7968
+      nfiles: 1
+    - path: data-simulation/input/wind_velocity_usa_era5
+      md5: 952d7aa68150cb7e731db3160f0e8fe1.dir
+      size: 2490696432
+      nfiles: 252
+  wind_speed_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_wind_speed.py
+    deps:
+    - path: data-simulation/input/p_out_eia
+      md5: f89350c269a9a4542c0b9e60c3905067.dir
+      size: 7968
+      nfiles: 1
+    - path: data-simulation/input/wind_velocity_usa_era5
+      md5: 952d7aa68150cb7e731db3160f0e8fe1.dir
+      size: 2490696432
+      nfiles: 252
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: 3ce699cb6b6b5dffe2852f1b9c5f96b0.dir
+      size: 138459
+      nfiles: 25
+    outs:
+    - path: data-simulation/interim/wind_speed
+      md5: dd83c94f6bcd5d6aff067aa21701ca52.dir
+      size: 66872022
+      nfiles: 42
+  calc_turbine_time_series_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_turbine_time_series.py
+    deps:
+    - path: data-simulation/input/p_out_eia
+      md5: f89350c269a9a4542c0b9e60c3905067.dir
+      size: 7968
+      nfiles: 1
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    outs:
+    - path: data-simulation/output/turbine-time-series
+      md5: 495f3e98e469f54a0e3e27cbcca67e01.dir
+      size: 8581456
+      nfiles: 5
+  calc_p_in_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_in.py
+    deps:
+    - path: data-simulation/input/p_out_eia
+      md5: f89350c269a9a4542c0b9e60c3905067.dir
+      size: 7968
+      nfiles: 1
+    - path: data-simulation/interim/wind_speed
+      md5: dd83c94f6bcd5d6aff067aa21701ca52.dir
+      size: 66872022
+      nfiles: 42
+    - path: data-simulation/output/turbine-time-series
+      md5: 495f3e98e469f54a0e3e27cbcca67e01.dir
+      size: 8581456
+      nfiles: 5
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    - path: src
+      md5: f424f76fdb3e38b81e9c5850ece4f3a4.dir
+      size: 138437
+      nfiles: 25
+    outs:
+    - path: data-simulation/output/p_in
+      md5: 99d79166d47cb61ce969b07601a988e3.dir
+      size: 1508646
+      nfiles: 2
+  checks_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/run_checks.py
+    deps:
+    - path: data-simulation/input/p_out_eia
+      md5: f89350c269a9a4542c0b9e60c3905067.dir
+      size: 7968
+      nfiles: 1
+    - path: data-simulation/interim/wind_speed
+      md5: dd83c94f6bcd5d6aff067aa21701ca52.dir
+      size: 66872022
+      nfiles: 42
+    - path: data-simulation/output/p_in
+      md5: 99d79166d47cb61ce969b07601a988e3.dir
+      size: 1508646
+      nfiles: 2
+    - path: data-simulation/output/p_out_model
+      md5: f02814942e66d0df36d580ae4909957b.dir
+      size: 7543270
+      nfiles: 10
+    - path: data-simulation/output/turbine-time-series
+      md5: 495f3e98e469f54a0e3e27cbcca67e01.dir
+      size: 8581456
+      nfiles: 5
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: f424f76fdb3e38b81e9c5850ece4f3a4.dir
+      size: 138437
+      nfiles: 25
+  calc_p_out_model:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_out_model.py
+    deps:
+    - path: data/interim/wind_speed
+      md5: 93dbad4ac695b177cf69730ee46cee9e.dir
+      size: 238873562106
+      nfiles: 42
+    - path: data/output/bias_correction
+      md5: 54713427c56bcac6f47078b25725df6a.dir
+      size: 11697732
+      nfiles: 3
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/output/p_out_model
+      md5: 02079d8697ebcd2dad68dcb182cff42e.dir
+      size: 155759590
+      nfiles: 10
+  calc_p_in:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_in.py
+    deps:
+    - path: data/input/p_out_eia
+      md5: ab96b0ba0d9ef8c2fd4b2e741d06c0f3.dir
+      size: 6079
+      nfiles: 1
+    - path: data/interim/wind_speed
+      md5: 93dbad4ac695b177cf69730ee46cee9e.dir
+      size: 238873562106
+      nfiles: 42
+    - path: data/output/turbine-time-series
+      md5: 1e5fea4df6314979fdb213e561b60c31.dir
+      size: 180358480
+      nfiles: 5
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/output/p_in
+      md5: d5f51a9ab29a7cb4432ccc80e8257479.dir
+      size: 31151910
+      nfiles: 2
+  calc_p_out_model_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_p_out_model.py
+    deps:
+    - path: data-simulation/interim/wind_speed
+      md5: dd83c94f6bcd5d6aff067aa21701ca52.dir
+      size: 66872022
+      nfiles: 42
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: f424f76fdb3e38b81e9c5850ece4f3a4.dir
+      size: 138437
+      nfiles: 25
+    outs:
+    - path: data-simulation/output/p_out_model
+      md5: f02814942e66d0df36d580ae4909957b.dir
+      size: 7543270
+      nfiles: 10
+  figures:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/generate_figures.py
+    deps:
+    - path: data/output/bias_correction
+      md5: 54713427c56bcac6f47078b25725df6a.dir
+      size: 11697732
+      nfiles: 3
+    - path: data/output/p_in
+      md5: d5f51a9ab29a7cb4432ccc80e8257479.dir
+      size: 31151910
+      nfiles: 2
+    - path: data/output/p_out_model
+      md5: 02079d8697ebcd2dad68dcb182cff42e.dir
+      size: 155759590
+      nfiles: 10
+    - path: data/output/turbine-time-series
+      md5: 1e5fea4df6314979fdb213e561b60c31.dir
+      size: 180358480
+      nfiles: 5
+    - path: scripts
+      md5: 46fbf860465f11e478b485d2f7546d40.dir
+      size: 54861
+      nfiles: 16
+    - path: src
+      md5: 4809bc828dcac733751f39d1bc7e524f.dir
+      size: 151171
+      nfiles: 25
+    outs:
+    - path: data/figures
+      md5: b9206601b1284849132c892a0a03f654.dir
+      size: 4266162
+      nfiles: 31
+  unit_test:
+    cmd: python3 -m pytest --cov=src --cov-report=term --cov-report=html tests
+    deps:
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+  lint:
+    cmd: flake8 && black --check .
+    deps:
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: f96eb3c3758e5dd65049c3f467addd8b.dir
+      size: 139395
+      nfiles: 25
+  download_wind_era5:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/download_wind_era5.py
+  download_p_out_eia:
+    cmd: EIA_API_KEY=$(cat eia-api-key); mkdir data/input/p_out_eia; cd data/input/p_out_eia;
+      wget https://api.eia.gov/series/\?api_key\=$EIA_API_KEY\&series_id\=ELEC.GEN.WND-US-99.M
+      -O ELEC.GEN.WND-US-99.M.json
+    outs:
+    - path: data/input/p_out_eia
+      md5: ab96b0ba0d9ef8c2fd4b2e741d06c0f3.dir
+      size: 6079
+      nfiles: 1
+  data_values:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/calc_data_values.py
+    deps:
+    - path: scripts
+      md5: 0d085276e8f636b42d86036cc7e60cff.dir
+      size: 55363
+      nfiles: 16
+    - path: src
+      md5: 4809bc828dcac733751f39d1bc7e524f.dir
+      size: 151171
+      nfiles: 25
+  preprocess_turbines:
+    cmd: PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/preprocess_turbines.py
+    deps:
+    - path: data/input/wind_turbines_usa
+      md5: 2eb1c19b3960cce356e46b4eebfd58a5.dir
+      size: 53213452
+      nfiles: 6
+    - path: scripts
+      md5: 57f9a80973333b4253cdeee1c1846096.dir
+      size: 49008
+      nfiles: 15
+    - path: src
+      md5: 8f1547018f19a102d4e204cac9fd108a.dir
+      size: 139376
+      nfiles: 25
+    outs:
+    - path: data/output/turbines
+      md5: aa97b81678a181850164943964a89be5.dir
+      size: 115489264
+      nfiles: 2
+  create_simulation_turbines:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/create_simulation_turbines.py
+    deps:
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: 3ce699cb6b6b5dffe2852f1b9c5f96b0.dir
+      size: 138459
+      nfiles: 25
+    outs:
+    - path: data-simulation/input/wind_turbines_usa
+      md5: b3dc909d020ec16251371eb507608ded.dir
+      size: 411541
+      nfiles: 6
+  preprocess_turbines_simulation:
+    cmd: SIMULATION=1 PYTHONPATH=$PYTHONPATH:$PWD python3 scripts/preprocess_turbines.py
+    deps:
+    - path: data-simulation/input/wind_turbines_usa
+      md5: b3dc909d020ec16251371eb507608ded.dir
+      size: 411541
+      nfiles: 6
+    - path: scripts
+      md5: 82303b13fccc8654af40b93feb5b5ccd.dir
+      size: 49099
+      nfiles: 15
+    - path: src
+      md5: 3ce699cb6b6b5dffe2852f1b9c5f96b0.dir
+      size: 138459
+      nfiles: 25
+    outs:
+    - path: data-simulation/output/turbines
+      md5: f447f9dd6cb238caf4ea01b8f7435b01.dir
+      size: 1877939
+      nfiles: 2

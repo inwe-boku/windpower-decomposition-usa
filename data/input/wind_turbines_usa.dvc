@@ -1,0 +1,5 @@
+outs:
+- md5: 2eb1c19b3960cce356e46b4eebfd58a5.dir
+  path: wind_turbines_usa
+  size: 53213452
+  nfiles: 6

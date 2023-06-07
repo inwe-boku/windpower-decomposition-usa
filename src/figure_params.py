@@ -52,34 +52,56 @@ d_in_line_param = LineParam(
     color=TURBINE_COLORS[4],
 )
 
+p_out_decomposition_figure_param = FigureParam(
+    name="p_out_decomposition",
+    unit="%",
+    absolute_plot=False,
+    lines=[
+        LineParam(
+            rotor_swept_area_avg,
+            label="Average rotor swept area $A$",
+            color=TURBINE_COLORS[1],
+        ),
+        LineParam(
+            data=num_turbines_built * 1e-3,
+            label="Number of operating turbines $N$",
+            # unit="in thousands",
+            color=TURBINE_COLORS[2],
+        ),
+        efficiency_line_param,
+        d_in_line_param,
+    ],
+)
+
 d_in_figure_param = FigureParam(
     name="d_in",
     unit="Input power density (W/m²)",
     lines=[
         LineParam(
             data=d_in_avgwind,
-            label="Long-term average wind conditions",
+            label="Without annual variations in wind conditions",
             color=TURBINE_COLORS[4],
         ),
         d_in_line_param._replace(
             linestyle="--",
-            label="Actual wind conditions",
+            label="With annual variations in wind conditions",
         ),
         # TODO do we need refheight here?
     ],
 )
+
 d_out_figure_param = FigureParam(
     name="d_out",
     unit="Output power density (W/m²)",
     lines=[
         LineParam(
             data=d_out_avgwind,
-            label="Long-term average wind conditions",
+            label="Without annual variations in wind conditions",
             color=TURBINE_COLORS[4],
         ),
         LineParam(
             data=d_out,
-            label="Actual wind conditions",
+            label="With annual variations in wind conditions",
             color=TURBINE_COLORS[4],
             linestyle="--",
         ),
@@ -92,7 +114,7 @@ d_out_refspecpower_figure_param.lines.extend(
     [
         LineParam(
             data=1e9 * load_p_out_model(refspecpower=specific_power_avg) / rotor_swept_area,
-            label="Constant specific power, actual wind conditions",
+            label="Constant specific power, with annual variations in wind conditions",
             color="#000000",
             linestyle="--",
             linewidth=0.7,
@@ -101,7 +123,7 @@ d_out_refspecpower_figure_param.lines.extend(
             data=1e9
             * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
             / rotor_swept_area,
-            label="Constant specific power, long-term average wind conditions",
+            label="Constant specific power, without annual variations in wind conditions",
             color="#000000",
             linestyle="-",
             linewidth=0.7,
@@ -115,12 +137,12 @@ efficiency_figure_param = FigureParam(
     lines=[
         LineParam(
             data=efficiency_avgwind,
-            label="Long-term average wind conditions",
+            label="Without annual variations in wind conditions",
             color=TURBINE_COLORS[3],
         ),
         efficiency_line_param._replace(
             linestyle="--",
-            label="Actual wind conditions",
+            label="With annual variations in wind conditions",
         ),
         # TODO do we need refheight here?
     ],
@@ -133,7 +155,7 @@ efficiency_refspecpower_figure_param.lines.extend(
     [
         LineParam(
             data=100 * load_p_out_model(refspecpower=specific_power_avg) / p_in,
-            label="Constant specific power, actual wind conditions",
+            label="Constant specific power, with annual variations in wind conditions",
             color="#000000",
             linestyle="--",
             linewidth=0.7,
@@ -142,7 +164,7 @@ efficiency_refspecpower_figure_param.lines.extend(
             data=100
             * load_p_out_model(refspecpower=specific_power_avg, avgwind=True)
             / p_in_avgwind,
-            label="Constant specific power, long-term average wind conditions",
+            label="Constant specific power, without annual variations in wind conditions",
             color="#000000",
             linestyle="-",
             linewidth=0.7,
@@ -157,18 +179,19 @@ capacity_factors_param = FigureParam(
     lines=[
         LineParam(
             data=capacity_factors_model_avgwind,
-            label="Simulation using power curve model (long-term average wind conditions)",
+            label="Simulation using power curve model, without annual variations in wind "
+            "conditions",
             color=TURBINE_COLORS[3],
         ),
         LineParam(
             data=capacity_factors_model,
-            label="Simulation using power curve model, actual wind conditions",
+            label="Simulation using power curve model, with annual variations in wind conditions",
             linestyle="--",
             color=TURBINE_COLORS[3],
         ),
         LineParam(
             data=capacity_factors_eia,
-            label="Observation data provided by IRENA",
+            label="Observation data provided by EIA",
             color=TURBINE_COLORS[4],
         ),
     ],
@@ -178,10 +201,10 @@ capacity_factors_param = FigureParam(
 d_out_validation_figure_param = deepcopy(d_out_figure_param)
 d_out_validation_figure_param = d_out_validation_figure_param._replace(name="d_out_validation")
 d_out_validation_figure_param.lines[0] = d_out_validation_figure_param.lines[0]._replace(
-    label="Simulation using power curve model (long-term average wind conditions)",
+    label="Simulation using power curve model, without annual variations in wind conditions",
 )
 d_out_validation_figure_param.lines[1] = d_out_validation_figure_param.lines[1]._replace(
-    label="Simulation using power curve model, actual wind conditions",
+    label="Simulation using power curve model, with annual variations in wind conditions",
 )
 d_out_validation_figure_param.lines.extend(
     [
@@ -214,10 +237,10 @@ efficiency_validation_figure_param = efficiency_validation_figure_param._replace
     name="efficiency_validation"
 )
 efficiency_validation_figure_param.lines[0] = efficiency_validation_figure_param.lines[0]._replace(
-    label="Simulation using power curve model, long-term average wind conditions"
+    label="Simulation using power curve model, without annual variations in wind conditions"
 )
 efficiency_validation_figure_param.lines[1] = efficiency_validation_figure_param.lines[1]._replace(
-    label="Simulation using power curve model, actual wind conditions",
+    label="Simulation using power curve model, with annual variations in wind conditions",
 )
 efficiency_validation_figure_param.lines.extend(
     [
@@ -242,10 +265,10 @@ average_cp_figure_param = deepcopy(efficiency_figure_param)
 average_cp_figure_param = average_cp_figure_param._replace(name="average_cp")
 average_cp_figure_param = average_cp_figure_param._replace(unit="%")
 average_cp_figure_param.lines[0] = average_cp_figure_param.lines[0]._replace(
-    label="System efficiency, long-term average wind conditions"
+    label="System efficiency, without annual variations in wind conditions"
 )
 average_cp_figure_param.lines[1] = average_cp_figure_param.lines[1]._replace(
-    label="System efficiency, actual wind conditions",
+    label="System efficiency, with annual variations in wind conditions",
 )
 p_out_model_raw = load_p_out_model(aggregate=False)
 p_in_raw = load_p_in(aggregate=False)
@@ -257,13 +280,13 @@ average_cp_figure_param.lines.extend(
             data=(100 * p_out_model_avgwind_raw / LOSS_CORRECTION_FACTOR / p_in_avgwind_raw).mean(
                 dim="turbines"
             ),
-            label="Average $C_p$, long-term average wind conditions",
+            label="Average $C_p$, without annual variations in wind conditions",
             color="#19484c",
             linestyle="-",
         ),
         LineParam(
             data=(100 * p_out_model_raw / LOSS_CORRECTION_FACTOR / p_in_raw).mean(dim="turbines"),
-            label="Average $C_p$, actual wind conditions",
+            label="Average $C_p$, with annual variations in wind conditions",
             color="#19484c",
             linestyle="--",
         ),
@@ -277,12 +300,12 @@ efficiency_aging_figure_param.lines.extend(
     [
         LineParam(
             data=100 * p_out_model_aging_avgwind / p_in_avgwind,
-            label="Aging loss subtracted, long-term average wind conditions",
+            label="Aging loss subtracted, without annual variations in wind conditions",
             color="#7a6952",
         ),
         LineParam(
             data=100 * p_out_model_aging / p_in,
-            label="Aging loss subtracted, actual wind conditions",
+            label="Aging loss subtracted, with annual variations in wind conditions",
             color="#7a6952",
             linestyle="--",
         ),
@@ -295,12 +318,12 @@ d_out_aging_figure_param.lines.extend(
     [
         LineParam(
             data=1e9 * p_out_model_aging_avgwind / rotor_swept_area,
-            label="Aging loss subtracted, long-term average wind conditions",
+            label="Aging loss subtracted, without annual variations in wind conditions",
             color="#7a6952",
         ),
         LineParam(
             data=1e9 * p_out_model_aging / rotor_swept_area,
-            label="Aging loss subtracted, actual wind conditions",
+            label="Aging loss subtracted, with annual variations in wind conditions",
             color="#7a6952",
             linestyle="--",
         ),
@@ -309,26 +332,7 @@ d_out_aging_figure_param.lines.extend(
 
 
 figure_params = [
-    FigureParam(
-        name="p_out_decomposition",
-        unit="%",
-        absolute_plot=False,
-        lines=[
-            LineParam(
-                rotor_swept_area_avg,
-                label="Average rotor swept area $A$",
-                color=TURBINE_COLORS[1],
-            ),
-            LineParam(
-                data=num_turbines_built * 1e-3,
-                label="Number of operating turbines $N$",
-                # unit="in thousands",
-                color=TURBINE_COLORS[2],
-            ),
-            efficiency_line_param,
-            d_in_line_param,
-        ],
-    ),
+    p_out_decomposition_figure_param,
     d_out_refspecpower_figure_param,
     efficiency_refspecpower_figure_param,
     d_in_figure_param,

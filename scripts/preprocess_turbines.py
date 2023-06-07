@@ -134,7 +134,7 @@ def filter_valid_specific_power(turbines):
 
 def filter_offshore(turbines):
     """There are almost no offshore turbines in the USA. According to a talk by Lucy Pao, there are
-    only 7 offshore turbines (with 6MW capacity each) operating at the moment. The USWTDB seems to
+    only 7 offshore turbines (with 6 MW capacity each) operating at the moment. The USWTDB seems to
     contain two turbines, which are not covered by the GWA2 (interpolation at the location yields
     NaN). We simply remove these two turbines. This needs to be changed
     """

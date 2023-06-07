@@ -76,37 +76,89 @@ def plot_growth_of_wind_power():
     return fig
 
 
-def plot_growth_and_specific_power():
+def plot_growth_and_specific_power(plot_percentiles=False, plot_number_of_turbines=False):
     from src.loaded_files import turbines
     from src.loaded_files import is_built
     from src.loaded_files import num_turbines_built
     from src.loaded_files import specific_power_per_year
     from src.loaded_files import rotor_swept_area_avg
 
-    fig, axes = plt.subplots(4, figsize=FIGSIZE, sharex=True)
+    if plot_number_of_turbines:
+        num_plots = 5
+        figsize = (12, 14)
+    else:
+        num_plots = 4
+        figsize = FIGSIZE
+
+    fig, axes = plt.subplots(num_plots, figsize=figsize, sharex=True)
+
+    def percentiles(data, axes):
+        if not plot_percentiles:
+            return
+
+        for width in (10, 20, 30):
+            axes.fill_between(
+                is_built.time,
+                data.where(is_built).quantile(width / 100, dim="turbines", skipna=True),
+                data.where(is_built).quantile(1 - width / 100, dim="turbines", skipna=True),
+                color="#c72321",
+                alpha=width / 100 / 2,
+                linewidth=0,
+                label=f"{width}/{100-width} percentiles",
+            )
+        data.where(is_built).quantile(0.50, dim="turbines", skipna=True).plot.line(
+            color="#c72321", ax=axes, label="Median"
+        )
 
     # might fix spacing for titles
     fig.tight_layout(h_pad=2)
 
     ((turbines.t_hh * is_built).sum(dim="turbines") / num_turbines_built).plot.line(
-        color="k", ax=axes[0]
+        color="k",
+        ax=axes[0],
+        label="Average",
     )
+    percentiles(turbines.t_hh, axes[0])
     axes[0].set_title("Average hub height")
     axes[0].set_ylabel("m")
 
     ((turbines.t_cap * is_built).sum(dim="turbines") / num_turbines_built).plot.line(
         color="k", ax=axes[1]
     )
+    percentiles(turbines.t_cap, axes[1])
     axes[1].set_title("Average capacity")
     axes[1].set_ylabel("KW")
 
     rotor_swept_area_avg.plot.line(color="k", ax=axes[2])
+    percentiles(turbines.t_rd**2 / 4 * np.pi, axes[2])
     axes[2].set_title("Average rotor swept area")
     axes[2].set_ylabel("m²")
 
     specific_power_per_year.plot.line(color="k", ax=axes[3])
-    axes[3].set_title("Average specific power (W/m²)")
+    specific_power = 1e3 * turbines.t_cap / (turbines.t_rd**2 * np.pi / 4)
+    percentiles(specific_power, axes[3])
+    axes[3].set_title("Average specific power")
     axes[3].set_ylabel("W/m²")
+
+    if plot_number_of_turbines:
+        is_built.sum(dim="turbines").plot.line(color="k", ax=axes[4])
+        axes[4].set_title("Number of operating turbines")
+
+    plt.tight_layout(rect=[0, 0, 0.805, 1])
+
+    if plot_percentiles:
+        handles, labels = axes[0].get_legend_handles_labels()
+        legend = fig.legend(
+            handles,
+            labels,
+            loc="upper right",
+            bbox_to_anchor=(1, 0.975),
+            framealpha=1.0,
+            fancybox=False,
+        )
+        # this seems to be the default line width for ax.spines for the subplots
+        legend.get_frame().set_linewidth(0.8)
+        legend.get_frame().set_edgecolor("k")
 
     for ax in axes:
         ax.set_xlabel("")
@@ -158,7 +210,7 @@ def plot_timeseries_figure(figure_params, ax=None, fig=None):
         )
 
     if not figure_params.absolute_plot:
-        ax.axhline(100, color="k", linewidth=1)
+        ax.axhline(100, color="k", linewidth=1, label="100 %")
         ax.set_ylabel(f"Relative to {int(line_params.data.time.dt.year[0])} (%)")
 
     ax.legend()
@@ -724,7 +776,7 @@ def plot_example_turbine_characteristics(
             if turbine_longname_mapping is not None
             else sample_turbine_name
         )
-        label = f"{longname}, {capacity * 1e-3}MW capacity"  # , {rotor_diameter}m rotor diameter"
+        label = f"{longname}, {capacity * 1e-3} MW capacity"  # , {rotor_diameter}m rotor diameter"
         power_curve = capacity * power_curve_model.interp(
             specific_power=specific_power, method="linear"
         )

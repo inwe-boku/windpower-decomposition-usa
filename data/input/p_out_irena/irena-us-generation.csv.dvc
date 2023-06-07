@@ -1,0 +1,4 @@
+outs:
+- md5: 7d252353b39ea30fded6e99a880484e1
+  size: 142
+  path: irena-us-generation.csv
