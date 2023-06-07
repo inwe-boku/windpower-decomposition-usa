@@ -94,7 +94,7 @@ conda activate wind_power_decomposition_usa
 
 Download data:
 * `dvc repro download_turbines`: unfortunately old versions of the USWTDB are not available for
-  download, i.e. this won't work automatically. A recent version of the USWTDB is available [here](https://eerscmap.usgs.gov/uswtdb/data/), [load_turbines.py](src/load_turbines.py) has to be adapted to the the new USWTDB file.
+  download, i.e. this won't work automatically. A recent version of the USWTDB is available [here](https://eerscmap.usgs.gov/uswtdb/data/), [load_data.py](src/load_data.py) has to be adapted to the the new USWTDB file.
 * `dvc repro download_wind_era5` - will download approx. 115GB of ERA5 wind speed data
 * `dvc repro download_p_out_eia`
 
