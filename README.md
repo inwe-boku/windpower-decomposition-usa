@@ -1,6 +1,6 @@
 [![MIT License](https://img.shields.io/github/license/inwe-boku/wind-repowering-usa.svg)](https://choosealicense.com/licenses/mit/)
 [![Tests](https://github.com/inwe-boku/windpower-decomposition-usa/workflows/Tests/badge.svg)](https://github.com/inwe-boku/windpower-decomposition-usa/actions?query=workflow%3ATests)
-[![DOI](https://img.shields.io/badge/DOI-10.1088/2515-7620/ace0b9-blue)](https://doi.org/10.1088/2515-7620/ace0b9)
+[![DOI](https://img.shields.io/badge/DOI-10.1088/2515--7620/ace0b9-blue)](https://doi.org/10.1088/2515-7620/ace0b9)
 
 
 Explaining the decline of US wind output power density
