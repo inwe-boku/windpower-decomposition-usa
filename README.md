@@ -1,13 +1,14 @@
 [![MIT License](https://img.shields.io/github/license/inwe-boku/wind-repowering-usa.svg)](https://choosealicense.com/licenses/mit/)
 [![Tests](https://github.com/inwe-boku/windpower-decomposition-usa/workflows/Tests/badge.svg)](https://github.com/inwe-boku/windpower-decomposition-usa/actions?query=workflow%3ATests)
+[![DOI](https://img.shields.io/badge/DOI-10.1088/2515-7620/ace0b9-blue)](https://doi.org/10.1088/2515-7620/ace0b9)
+
 
 Explaining the decline of US wind output power density
 ======================================================
 
 Peter Regner, Katharina Gruber, Sebastian Wehrle, Johannes Schmidt
 
-This repository contains code, figures and results for a study regarding US wind power density. A pre-print is available [here](https://arxiv.org/abs/2107.14699). The manuscript has been accepted at [Environmental Research Communications](https://iopscience.iop.org/journal/2515-7620) and will be published soon.
-
+This repository contains code, figures and results for a [study regarding US wind power density](https://doi.org/10.1088/2515-7620/ace0b9).
 
 
 Abstract
